@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/glacierzzz26/one-person-company-os/internal/execution"
-	"github.com/glacierzzz26/one-person-company-os/internal/runtime"
 	"github.com/glacierzzz26/one-person-company-os/internal/task"
+	"github.com/glacierzzz26/one-person-company-os/internal/tool"
 	"github.com/google/uuid"
 )
 
@@ -65,10 +65,25 @@ func (s *Service) GetExecution(ctx context.Context, id string) (execution.Execut
 	return s.store.GetExecution(ctx, id)
 }
 
+// runClaimed 执行已领取的 Task:先做 Tool 权限校验(默认拒绝),未授权则
+// Audit deny 并失败;通过后创建 Execution,在 Tool 沙箱内执行 task.Description。
 func (s *Service) runClaimed(ctx context.Context, workerID string, t task.Task) error {
-	rt, ok := runtime.Get("shell")
+	tl, ok := tool.Get("shell")
 	if !ok {
-		return errors.New("runtime 'shell' not registered")
+		return errors.New("tool 'shell' not registered")
+	}
+
+	allowed, err := s.authorizeTool(ctx, t, tl)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		msg := fmt.Sprintf("unauthorized: role has no permission for %s/%s", tl.Permission().Action, tl.Permission().Resource)
+		if _, err := s.audit(ctx, "tool", tl.Name(), "deny", taskActor(t), msg+": "+t.Title); err != nil {
+			return err
+		}
+		_, err := s.store.FailTask(ctx, t.ID, msg)
+		return err
 	}
 
 	execID := uuid.NewString()
@@ -89,7 +104,7 @@ func (s *Service) runClaimed(ctx context.Context, workerID string, t task.Task) 
 	runCtx, cancel := runContext(ctx, t.TimeoutSec)
 	defer cancel()
 
-	res, execErr := rt.Execute(runCtx, t)
+	res, execErr := tl.Execute(runCtx, t)
 	finishAt := time.Now().Unix()
 
 	if execErr != nil {
@@ -121,6 +136,31 @@ func (s *Service) runClaimed(ctx context.Context, workerID string, t task.Task) 
 		return err
 	}
 	return nil
+}
+
+// authorizeTool 校验 Task 关联 Agent 的 Role 是否被授予对 tool 的权限。
+// 无 Agent 或无匹配 allow policy → 拒绝(默认拒绝)。
+func (s *Service) authorizeTool(ctx context.Context, t task.Task, tl tool.Tool) (bool, error) {
+	if t.AgentID == nil {
+		return false, nil
+	}
+	a, err := s.store.GetAgent(ctx, *t.AgentID)
+	if err != nil {
+		return false, err
+	}
+	perm := tl.Permission()
+	n, err := s.store.CheckPermission(ctx, a.Role, perm.Action, perm.Resource)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+func taskActor(t task.Task) string {
+	if t.AgentID == nil {
+		return "agent:none"
+	}
+	return "agent:" + *t.AgentID
 }
 
 func leaseUntil() int64 {

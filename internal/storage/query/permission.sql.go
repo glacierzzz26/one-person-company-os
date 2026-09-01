@@ -9,6 +9,25 @@ import (
 	"context"
 )
 
+const checkPermission = `-- name: CheckPermission :one
+SELECT COUNT(*) FROM permission p
+JOIN policy po ON po.id = p.policy_id
+WHERE p.subject = ? AND p.action = ? AND p.resource = ? AND po.enabled = 1 AND po.kind = 'allow'
+`
+
+type CheckPermissionParams struct {
+	Subject  string `json:"subject"`
+	Action   string `json:"action"`
+	Resource string `json:"resource"`
+}
+
+func (q *Queries) CheckPermission(ctx context.Context, arg CheckPermissionParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, checkPermission, arg.Subject, arg.Action, arg.Resource)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createPermission = `-- name: CreatePermission :one
 INSERT INTO permission (id, policy_id, subject, action, resource, created_at)
 VALUES (?, ?, ?, ?, ?, ?)

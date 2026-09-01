@@ -30,6 +30,14 @@ func (s *Store) ListPermissionsByPolicy(ctx context.Context, policyID string) ([
 	return out, nil
 }
 
+// CheckPermission 返回 subject 在 enabled allow policy 下对 (action, resource) 的授权数。
+// 0 表示未授权(默认拒绝)。
+func (s *Store) CheckPermission(ctx context.Context, subject, action, resource string) (int64, error) {
+	return s.q.CheckPermission(ctx, query.CheckPermissionParams{
+		Subject: subject, Action: action, Resource: resource,
+	})
+}
+
 func toPermission(r query.Permission) permission.Permission {
 	return permission.Permission{
 		ID: r.ID, PolicyID: r.PolicyID, Subject: r.Subject, Action: r.Action,
