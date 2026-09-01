@@ -148,6 +148,40 @@ func (s *Store) ApproveTask(ctx context.Context, taskID string) (task.Task, erro
 	return toTask(row), nil
 }
 
+// ListRecentTasks 最近 N 个 Task(创建时间倒序),用于全景视图。
+func (s *Store) ListRecentTasks(ctx context.Context, companyID string, limit int64) ([]task.Task, error) {
+	rows, err := s.q.ListRecentTasks(ctx, query.ListRecentTasksParams{CompanyID: companyID, Limit: limit})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]task.Task, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toTask(r))
+	}
+	return out, nil
+}
+
+// TaskStatusCountsByWorkflow 各 Workflow 的任务状态计数,用于全景视图。
+type TaskStatusCount struct {
+	WorkflowID string
+	Status     string
+	Cnt        int64
+}
+
+func (s *Store) TaskStatusCountsByWorkflow(ctx context.Context, companyID string) ([]TaskStatusCount, error) {
+	rows, err := s.q.TaskStatusCountsByWorkflow(ctx, companyID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TaskStatusCount, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, TaskStatusCount{
+			WorkflowID: r.WorkflowID.String, Status: r.Status, Cnt: r.Cnt,
+		})
+	}
+	return out, nil
+}
+
 func toTask(r query.Task) task.Task {
 	return task.Task{
 		ID: r.ID, CompanyID: r.CompanyID,

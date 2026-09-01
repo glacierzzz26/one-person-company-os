@@ -61,3 +61,16 @@ SET qstatus = 'ready', status = 'pending',
     lease_worker_id = '', lease_until = 0, last_error = '', updated_at = ?
 WHERE id = ?
 RETURNING *;
+
+-- name: ListRecentTasks :many
+SELECT * FROM task
+WHERE company_id = ?
+ORDER BY created_at DESC
+LIMIT ?;
+
+-- name: TaskStatusCountsByWorkflow :many
+SELECT workflow_id, status, COUNT(*) AS cnt
+FROM task
+WHERE company_id = ? AND workflow_id IS NOT NULL
+GROUP BY workflow_id, status
+ORDER BY workflow_id;

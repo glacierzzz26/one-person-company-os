@@ -343,6 +343,64 @@ func (q *Queries) LeaseNextTask(ctx context.Context, arg LeaseNextTaskParams) (T
 	return i, err
 }
 
+const listRecentTasks = `-- name: ListRecentTasks :many
+SELECT id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at FROM task
+WHERE company_id = ?
+ORDER BY created_at DESC
+LIMIT ?
+`
+
+type ListRecentTasksParams struct {
+	CompanyID string `json:"company_id"`
+	Limit     int64  `json:"limit"`
+}
+
+func (q *Queries) ListRecentTasks(ctx context.Context, arg ListRecentTasksParams) ([]Task, error) {
+	rows, err := q.db.QueryContext(ctx, listRecentTasks, arg.CompanyID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Task{}
+	for rows.Next() {
+		var i Task
+		if err := rows.Scan(
+			&i.ID,
+			&i.CompanyID,
+			&i.CapabilityID,
+			&i.WorkflowID,
+			&i.AgentID,
+			&i.Title,
+			&i.Description,
+			&i.ToolName,
+			&i.Status,
+			&i.Priority,
+			&i.Attempt,
+			&i.Risk,
+			&i.Qstatus,
+			&i.LeaseWorkerID,
+			&i.LeaseUntil,
+			&i.MaxAttempts,
+			&i.TimeoutSec,
+			&i.LastError,
+			&i.Result,
+			&i.WorkspacePath,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTasks = `-- name: ListTasks :many
 SELECT id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at FROM task
 WHERE (?1 = '' OR company_id = ?2)
@@ -598,4 +656,41 @@ func (q *Queries) RequeueTask(ctx context.Context, arg RequeueTaskParams) (Task,
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const taskStatusCountsByWorkflow = `-- name: TaskStatusCountsByWorkflow :many
+SELECT workflow_id, status, COUNT(*) AS cnt
+FROM task
+WHERE company_id = ? AND workflow_id IS NOT NULL
+GROUP BY workflow_id, status
+ORDER BY workflow_id
+`
+
+type TaskStatusCountsByWorkflowRow struct {
+	WorkflowID sql.NullString `json:"workflow_id"`
+	Status     string         `json:"status"`
+	Cnt        int64          `json:"cnt"`
+}
+
+func (q *Queries) TaskStatusCountsByWorkflow(ctx context.Context, companyID string) ([]TaskStatusCountsByWorkflowRow, error) {
+	rows, err := q.db.QueryContext(ctx, taskStatusCountsByWorkflow, companyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TaskStatusCountsByWorkflowRow{}
+	for rows.Next() {
+		var i TaskStatusCountsByWorkflowRow
+		if err := rows.Scan(&i.WorkflowID, &i.Status, &i.Cnt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
