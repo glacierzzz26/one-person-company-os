@@ -1,0 +1,87 @@
+[
+  {
+    "step": "idea",
+    "title": "新品创意",
+    "description": "输入:新品创意(起始节点,声明输入,不执行)",
+    "skip": true
+  },
+  {
+    "step": "research",
+    "title": "Research 市场研究",
+    "description": "write research.md\n# 市场研究\n新品市场/竞品研究输出(Research Capability: market)",
+    "tool": "file-write",
+    "capability": "research",
+    "agent_role": "market",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "product",
+    "title": "Product 产品分析",
+    "description": "write product.md\n# 产品分析\n产品定位/PRD 输出(Product Capability: analyst)",
+    "tool": "file-write",
+    "capability": "product",
+    "agent_role": "analyst",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "engineering",
+    "title": "Engineering 实现",
+    "description": "write engineering.md\n# 实现说明\n工程实现/原型输出(Engineering Capability: coding)",
+    "tool": "file-write",
+    "capability": "engineering",
+    "agent_role": "coding",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "qa",
+    "title": "QA 测试",
+    "description": "write qa.md\n# 测试报告\n测试验证输出(Engineering Capability: qa)",
+    "tool": "file-write",
+    "capability": "engineering",
+    "agent_role": "qa",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "marketing",
+    "title": "Marketing 营销",
+    "description": "write marketing.md\n# 营销方案\n新品营销方案(Marketing Capability: campaign)",
+    "tool": "file-write",
+    "capability": "marketing",
+    "agent_role": "campaign",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "sales",
+    "title": "Sales 销售",
+    "description": "write sales.md\n# 销售方案\n报价/销售方案(Sales Capability: proposal)",
+    "tool": "file-write",
+    "capability": "sales",
+    "agent_role": "proposal",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "approval",
+    "title": "审批门",
+    "description": "审批发布前门:人工确认后放行",
+    "tool": "shell",
+    "agent_role": "",
+    "risk": "high",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "delivery",
+    "title": "Delivery 交付",
+    "description": "git commit -am \"deliver product launch\"",
+    "tool": "git",
+    "capability": "operations",
+    "agent_role": "quality",
+    "risk": "high",
+    "workspace": "<repo-workspace>"
+  }
+]
