@@ -19,10 +19,10 @@ func taskCmd() *cobra.Command {
 
 func taskCreateCmd() *cobra.Command {
 	var (
-		companyID, title, description, risk string
-		capabilityID, workflowID, agentID   string
-		workspace                           string
-		maxAttempts, timeoutSec             int64
+		companyID, title, description, risk, toolName string
+		capabilityID, workflowID, agentID            string
+		workspace                                    string
+		maxAttempts, timeoutSec                      int64
 	)
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -35,6 +35,7 @@ func taskCreateCmd() *cobra.Command {
 				CompanyID:   companyID,
 				Title:       title,
 				Description: description,
+				ToolName:    toolName,
 				Risk:        risk,
 				MaxAttempts: maxAttempts,
 				TimeoutSec:  timeoutSec,
@@ -59,7 +60,8 @@ func taskCreateCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&companyID, "company", "", "company id")
 	cmd.Flags().StringVar(&title, "title", "", "task title")
-	cmd.Flags().StringVar(&description, "description", "", "task description (command to run in Phase 1.1 shell runtime)")
+	cmd.Flags().StringVar(&description, "description", "", "task description (tool command: shell command / git subcommand / write <path>... / read <path>)")
+	cmd.Flags().StringVar(&toolName, "tool", "shell", "tool name: shell|git|file-read|file-write")
 	cmd.Flags().StringVar(&risk, "risk", "low", "low/medium/high")
 	cmd.Flags().Int64Var(&maxAttempts, "max-attempts", 1, "max attempts before terminal failed")
 	cmd.Flags().Int64Var(&timeoutSec, "timeout", 0, "execution timeout in seconds (0 = none)")

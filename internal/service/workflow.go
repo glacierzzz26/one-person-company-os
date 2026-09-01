@@ -13,6 +13,7 @@ type WorkflowNode struct {
 	Step        string `json:"step"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
+	Tool        string `json:"tool"`
 	AgentRole   string `json:"agent_role"`
 	Risk        string `json:"risk"`
 	Workspace   string `json:"workspace"`
@@ -66,7 +67,7 @@ func (s *Service) RunWorkflow(ctx context.Context, workerID, workflowID string) 
 
 		t, err := s.CreateTask(ctx, TaskParams{
 			CompanyID: w.CompanyID, WorkflowID: &w.ID, AgentID: agentID,
-			Title: title, Description: n.Description, Risk: risk,
+			Title: title, Description: n.Description, ToolName: n.Tool, Risk: risk,
 			MaxAttempts: 1, TimeoutSec: 0, Workspace: ws,
 		})
 		if err != nil {

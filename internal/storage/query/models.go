@@ -100,6 +100,7 @@ type Task struct {
 	AgentID       sql.NullString `json:"agent_id"`
 	Title         string         `json:"title"`
 	Description   string         `json:"description"`
+	ToolName      string         `json:"tool_name"`
 	Status        string         `json:"status"`
 	Priority      int64          `json:"priority"`
 	Attempt       int64          `json:"attempt"`

@@ -65,6 +65,7 @@ CREATE TABLE task (
     agent_id       TEXT REFERENCES agent(id),
     title          TEXT NOT NULL,
     description    TEXT NOT NULL DEFAULT '',
+    tool_name      TEXT NOT NULL DEFAULT 'shell',
     status         TEXT NOT NULL,
     priority       INTEGER NOT NULL DEFAULT 0,
     attempt        INTEGER NOT NULL DEFAULT 0,

@@ -8,6 +8,7 @@ type Task struct {
 	AgentID       *string
 	Title         string
 	Description   string
+	ToolName      string // 执行该 Task 的 Tool 名(默认 shell)
 	Status        string // 业务状态: pending | running | waiting_approval | completed | failed
 	Priority      int64
 	Attempt       int64

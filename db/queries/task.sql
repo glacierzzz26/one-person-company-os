@@ -1,6 +1,6 @@
 -- name: CreateTask :one
-INSERT INTO task (id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO task (id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetTask :one

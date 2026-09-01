@@ -15,6 +15,7 @@ type TaskParams struct {
 	AgentID      *string
 	Title        string
 	Description  string
+	ToolName     string
 	Risk         string
 	MaxAttempts  int64
 	TimeoutSec   int64
@@ -25,6 +26,9 @@ func (s *Service) CreateTask(ctx context.Context, p TaskParams) (task.Task, erro
 	if p.Risk == "" {
 		p.Risk = "low"
 	}
+	if p.ToolName == "" {
+		p.ToolName = "shell"
+	}
 	if p.MaxAttempts == 0 {
 		p.MaxAttempts = 1
 	}
@@ -32,7 +36,7 @@ func (s *Service) CreateTask(ctx context.Context, p TaskParams) (task.Task, erro
 	t := task.Task{
 		ID: uuid.NewString(), CompanyID: p.CompanyID,
 		CapabilityID: p.CapabilityID, WorkflowID: p.WorkflowID, AgentID: p.AgentID,
-		Title: p.Title, Description: p.Description,
+		Title: p.Title, Description: p.Description, ToolName: p.ToolName,
 		Status: "pending", Priority: 0, Attempt: 0, Risk: p.Risk,
 		QStatus: "ready", MaxAttempts: p.MaxAttempts, TimeoutSec: p.TimeoutSec,
 		WorkspacePath: p.Workspace,

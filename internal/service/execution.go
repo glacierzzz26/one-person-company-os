@@ -75,9 +75,9 @@ func (s *Service) runClaimed(ctx context.Context, workerID string, t task.Task) 
 		return s.requestApproval(ctx, t, reason)
 	}
 
-	tl, ok := tool.Get("shell")
+	tl, ok := tool.Get(t.ToolName)
 	if !ok {
-		return errors.New("tool 'shell' not registered")
+		return fmt.Errorf("task %s: tool %q not registered", t.ID, t.ToolName)
 	}
 
 	allowed, err := s.authorizeTool(ctx, t, tl)
