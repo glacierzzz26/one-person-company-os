@@ -58,20 +58,58 @@ CREATE TABLE workflow (
 );
 
 CREATE TABLE task (
-    id            TEXT PRIMARY KEY,
-    company_id    TEXT NOT NULL REFERENCES company(id),
-    capability_id TEXT REFERENCES capability(id),
-    workflow_id   TEXT REFERENCES workflow(id),
-    agent_id      TEXT REFERENCES agent(id),
-    title         TEXT NOT NULL,
-    description   TEXT NOT NULL DEFAULT '',
-    status        TEXT NOT NULL,
-    priority      INTEGER NOT NULL DEFAULT 0,
-    attempt       INTEGER NOT NULL DEFAULT 0,
-    risk          TEXT NOT NULL DEFAULT 'low',
-    created_at    INTEGER NOT NULL,
-    updated_at    INTEGER NOT NULL
+    id             TEXT PRIMARY KEY,
+    company_id     TEXT NOT NULL REFERENCES company(id),
+    capability_id  TEXT REFERENCES capability(id),
+    workflow_id    TEXT REFERENCES workflow(id),
+    agent_id       TEXT REFERENCES agent(id),
+    title          TEXT NOT NULL,
+    description    TEXT NOT NULL DEFAULT '',
+    status         TEXT NOT NULL,
+    priority       INTEGER NOT NULL DEFAULT 0,
+    attempt        INTEGER NOT NULL DEFAULT 0,
+    risk           TEXT NOT NULL DEFAULT 'low',
+    qstatus        TEXT NOT NULL DEFAULT 'ready',
+    lease_worker_id TEXT NOT NULL DEFAULT '',
+    lease_until    INTEGER NOT NULL DEFAULT 0,
+    max_attempts   INTEGER NOT NULL DEFAULT 1,
+    timeout_sec    INTEGER NOT NULL DEFAULT 0,
+    last_error     TEXT NOT NULL DEFAULT '',
+    result         TEXT NOT NULL DEFAULT '',
+    workspace_path TEXT NOT NULL DEFAULT '',
+    created_at     INTEGER NOT NULL,
+    updated_at     INTEGER NOT NULL
 );
+
+CREATE TABLE execution (
+    id          TEXT PRIMARY KEY,
+    task_id     TEXT NOT NULL REFERENCES task(id),
+    worker_id   TEXT NOT NULL DEFAULT '',
+    attempt     INTEGER NOT NULL DEFAULT 0,
+    status      TEXT NOT NULL,
+    started_at  INTEGER NOT NULL,
+    finished_at INTEGER,
+    result      TEXT NOT NULL DEFAULT '',
+    error       TEXT NOT NULL DEFAULT '',
+    created_at  INTEGER NOT NULL
+);
+
+CREATE INDEX idx_execution_task ON execution (task_id);
+
+CREATE TABLE approval (
+    id            TEXT PRIMARY KEY,
+    task_id       TEXT NOT NULL REFERENCES task(id),
+    risk          TEXT NOT NULL,
+    reason        TEXT NOT NULL DEFAULT '',
+    status        TEXT NOT NULL DEFAULT 'pending',
+    requested_by  TEXT NOT NULL DEFAULT '',
+    decided_by    TEXT NOT NULL DEFAULT '',
+    decision_note TEXT NOT NULL DEFAULT '',
+    created_at    INTEGER NOT NULL,
+    decided_at    INTEGER
+);
+
+CREATE INDEX idx_approval_task ON approval (task_id);
 
 CREATE TABLE audit (
     id          TEXT PRIMARY KEY,

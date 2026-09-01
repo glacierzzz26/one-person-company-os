@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -121,6 +122,7 @@ func workflowCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "workflow", Short: "Manage workflows"}
 	cmd.AddCommand(workflowAddCmd())
 	cmd.AddCommand(workflowListCmd())
+	cmd.AddCommand(workflowRunCmd())
 	return cmd
 }
 
@@ -170,5 +172,25 @@ func workflowListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&companyID, "company", "", "company id")
+	return cmd
+}
+
+func workflowRunCmd() *cobra.Command {
+	var worker string
+	cmd := &cobra.Command{
+		Use:   "run <id>",
+		Short: "Run a workflow: create and execute node tasks in order (aborts on node failure)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if worker == "" {
+				worker = "worker-" + uuid.NewString()[:8]
+			}
+			if err := svc.RunWorkflow(cmd.Context(), worker, args[0]); err != nil {
+				return err
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&worker, "worker", "", "worker id (default: worker-<rand>)")
 	return cmd
 }

@@ -18,6 +18,19 @@ type Agent struct {
 	UpdatedAt    int64  `json:"updated_at"`
 }
 
+type Approval struct {
+	ID           string        `json:"id"`
+	TaskID       string        `json:"task_id"`
+	Risk         string        `json:"risk"`
+	Reason       string        `json:"reason"`
+	Status       string        `json:"status"`
+	RequestedBy  string        `json:"requested_by"`
+	DecidedBy    string        `json:"decided_by"`
+	DecisionNote string        `json:"decision_note"`
+	CreatedAt    int64         `json:"created_at"`
+	DecidedAt    sql.NullInt64 `json:"decided_at"`
+}
+
 type Audit struct {
 	ID         string `json:"id"`
 	EntityType string `json:"entity_type"`
@@ -46,6 +59,19 @@ type Company struct {
 	UpdatedAt int64  `json:"updated_at"`
 }
 
+type Execution struct {
+	ID         string        `json:"id"`
+	TaskID     string        `json:"task_id"`
+	WorkerID   string        `json:"worker_id"`
+	Attempt    int64         `json:"attempt"`
+	Status     string        `json:"status"`
+	StartedAt  int64         `json:"started_at"`
+	FinishedAt sql.NullInt64 `json:"finished_at"`
+	Result     string        `json:"result"`
+	Error      string        `json:"error"`
+	CreatedAt  int64         `json:"created_at"`
+}
+
 type Permission struct {
 	ID        string `json:"id"`
 	PolicyID  string `json:"policy_id"`
@@ -67,19 +93,27 @@ type Policy struct {
 }
 
 type Task struct {
-	ID           string         `json:"id"`
-	CompanyID    string         `json:"company_id"`
-	CapabilityID sql.NullString `json:"capability_id"`
-	WorkflowID   sql.NullString `json:"workflow_id"`
-	AgentID      sql.NullString `json:"agent_id"`
-	Title        string         `json:"title"`
-	Description  string         `json:"description"`
-	Status       string         `json:"status"`
-	Priority     int64          `json:"priority"`
-	Attempt      int64          `json:"attempt"`
-	Risk         string         `json:"risk"`
-	CreatedAt    int64          `json:"created_at"`
-	UpdatedAt    int64          `json:"updated_at"`
+	ID            string         `json:"id"`
+	CompanyID     string         `json:"company_id"`
+	CapabilityID  sql.NullString `json:"capability_id"`
+	WorkflowID    sql.NullString `json:"workflow_id"`
+	AgentID       sql.NullString `json:"agent_id"`
+	Title         string         `json:"title"`
+	Description   string         `json:"description"`
+	Status        string         `json:"status"`
+	Priority      int64          `json:"priority"`
+	Attempt       int64          `json:"attempt"`
+	Risk          string         `json:"risk"`
+	Qstatus       string         `json:"qstatus"`
+	LeaseWorkerID string         `json:"lease_worker_id"`
+	LeaseUntil    int64          `json:"lease_until"`
+	MaxAttempts   int64          `json:"max_attempts"`
+	TimeoutSec    int64          `json:"timeout_sec"`
+	LastError     string         `json:"last_error"`
+	Result        string         `json:"result"`
+	WorkspacePath string         `json:"workspace_path"`
+	CreatedAt     int64          `json:"created_at"`
+	UpdatedAt     int64          `json:"updated_at"`
 }
 
 type Workflow struct {

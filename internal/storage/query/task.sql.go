@@ -10,26 +10,163 @@ import (
 	"database/sql"
 )
 
+const approveTask = `-- name: ApproveTask :one
+UPDATE task
+SET qstatus = 'ready', status = 'pending',
+    lease_worker_id = '', lease_until = 0, last_error = '', updated_at = ?
+WHERE id = ?
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+`
+
+type ApproveTaskParams struct {
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) ApproveTask(ctx context.Context, arg ApproveTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, approveTask, arg.UpdatedAt, arg.ID)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.CapabilityID,
+		&i.WorkflowID,
+		&i.AgentID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Priority,
+		&i.Attempt,
+		&i.Risk,
+		&i.Qstatus,
+		&i.LeaseWorkerID,
+		&i.LeaseUntil,
+		&i.MaxAttempts,
+		&i.TimeoutSec,
+		&i.LastError,
+		&i.Result,
+		&i.WorkspacePath,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const claimTask = `-- name: ClaimTask :one
+UPDATE task
+SET qstatus = 'leased', lease_worker_id = ?, lease_until = ?, updated_at = ?
+WHERE id = ? AND qstatus = 'ready'
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+`
+
+type ClaimTaskParams struct {
+	LeaseWorkerID string `json:"lease_worker_id"`
+	LeaseUntil    int64  `json:"lease_until"`
+	UpdatedAt     int64  `json:"updated_at"`
+	ID            string `json:"id"`
+}
+
+func (q *Queries) ClaimTask(ctx context.Context, arg ClaimTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, claimTask,
+		arg.LeaseWorkerID,
+		arg.LeaseUntil,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.CapabilityID,
+		&i.WorkflowID,
+		&i.AgentID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Priority,
+		&i.Attempt,
+		&i.Risk,
+		&i.Qstatus,
+		&i.LeaseWorkerID,
+		&i.LeaseUntil,
+		&i.MaxAttempts,
+		&i.TimeoutSec,
+		&i.LastError,
+		&i.Result,
+		&i.WorkspacePath,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const completeTask = `-- name: CompleteTask :one
+UPDATE task SET qstatus = 'completed', status = 'completed', result = ?, updated_at = ? WHERE id = ? RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+`
+
+type CompleteTaskParams struct {
+	Result    string `json:"result"`
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) CompleteTask(ctx context.Context, arg CompleteTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, completeTask, arg.Result, arg.UpdatedAt, arg.ID)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.CapabilityID,
+		&i.WorkflowID,
+		&i.AgentID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Priority,
+		&i.Attempt,
+		&i.Risk,
+		&i.Qstatus,
+		&i.LeaseWorkerID,
+		&i.LeaseUntil,
+		&i.MaxAttempts,
+		&i.TimeoutSec,
+		&i.LastError,
+		&i.Result,
+		&i.WorkspacePath,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createTask = `-- name: CreateTask :one
-INSERT INTO task (id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, created_at, updated_at
+INSERT INTO task (id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
 `
 
 type CreateTaskParams struct {
-	ID           string         `json:"id"`
-	CompanyID    string         `json:"company_id"`
-	CapabilityID sql.NullString `json:"capability_id"`
-	WorkflowID   sql.NullString `json:"workflow_id"`
-	AgentID      sql.NullString `json:"agent_id"`
-	Title        string         `json:"title"`
-	Description  string         `json:"description"`
-	Status       string         `json:"status"`
-	Priority     int64          `json:"priority"`
-	Attempt      int64          `json:"attempt"`
-	Risk         string         `json:"risk"`
-	CreatedAt    int64          `json:"created_at"`
-	UpdatedAt    int64          `json:"updated_at"`
+	ID            string         `json:"id"`
+	CompanyID     string         `json:"company_id"`
+	CapabilityID  sql.NullString `json:"capability_id"`
+	WorkflowID    sql.NullString `json:"workflow_id"`
+	AgentID       sql.NullString `json:"agent_id"`
+	Title         string         `json:"title"`
+	Description   string         `json:"description"`
+	Status        string         `json:"status"`
+	Priority      int64          `json:"priority"`
+	Attempt       int64          `json:"attempt"`
+	Risk          string         `json:"risk"`
+	Qstatus       string         `json:"qstatus"`
+	LeaseWorkerID string         `json:"lease_worker_id"`
+	LeaseUntil    int64          `json:"lease_until"`
+	MaxAttempts   int64          `json:"max_attempts"`
+	TimeoutSec    int64          `json:"timeout_sec"`
+	LastError     string         `json:"last_error"`
+	Result        string         `json:"result"`
+	WorkspacePath string         `json:"workspace_path"`
+	CreatedAt     int64          `json:"created_at"`
+	UpdatedAt     int64          `json:"updated_at"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
@@ -45,6 +182,14 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		arg.Priority,
 		arg.Attempt,
 		arg.Risk,
+		arg.Qstatus,
+		arg.LeaseWorkerID,
+		arg.LeaseUntil,
+		arg.MaxAttempts,
+		arg.TimeoutSec,
+		arg.LastError,
+		arg.Result,
+		arg.WorkspacePath,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -61,6 +206,53 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.Priority,
 		&i.Attempt,
 		&i.Risk,
+		&i.Qstatus,
+		&i.LeaseWorkerID,
+		&i.LeaseUntil,
+		&i.MaxAttempts,
+		&i.TimeoutSec,
+		&i.LastError,
+		&i.Result,
+		&i.WorkspacePath,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const failTask = `-- name: FailTask :one
+UPDATE task SET qstatus = 'failed', status = 'failed', last_error = ?, updated_at = ? WHERE id = ? RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+`
+
+type FailTaskParams struct {
+	LastError string `json:"last_error"`
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) FailTask(ctx context.Context, arg FailTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, failTask, arg.LastError, arg.UpdatedAt, arg.ID)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.CapabilityID,
+		&i.WorkflowID,
+		&i.AgentID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Priority,
+		&i.Attempt,
+		&i.Risk,
+		&i.Qstatus,
+		&i.LeaseWorkerID,
+		&i.LeaseUntil,
+		&i.MaxAttempts,
+		&i.TimeoutSec,
+		&i.LastError,
+		&i.Result,
+		&i.WorkspacePath,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -68,7 +260,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, created_at, updated_at FROM task WHERE id = ?
+SELECT id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at FROM task WHERE id = ?
 `
 
 func (q *Queries) GetTask(ctx context.Context, id string) (Task, error) {
@@ -86,6 +278,56 @@ func (q *Queries) GetTask(ctx context.Context, id string) (Task, error) {
 		&i.Priority,
 		&i.Attempt,
 		&i.Risk,
+		&i.Qstatus,
+		&i.LeaseWorkerID,
+		&i.LeaseUntil,
+		&i.MaxAttempts,
+		&i.TimeoutSec,
+		&i.LastError,
+		&i.Result,
+		&i.WorkspacePath,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const leaseNextTask = `-- name: LeaseNextTask :one
+UPDATE task
+SET qstatus = 'leased', lease_worker_id = ?, lease_until = ?, updated_at = ?
+WHERE id = (SELECT id FROM task WHERE qstatus = 'ready' ORDER BY priority DESC, created_at ASC LIMIT 1)
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+`
+
+type LeaseNextTaskParams struct {
+	LeaseWorkerID string `json:"lease_worker_id"`
+	LeaseUntil    int64  `json:"lease_until"`
+	UpdatedAt     int64  `json:"updated_at"`
+}
+
+func (q *Queries) LeaseNextTask(ctx context.Context, arg LeaseNextTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, leaseNextTask, arg.LeaseWorkerID, arg.LeaseUntil, arg.UpdatedAt)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.CapabilityID,
+		&i.WorkflowID,
+		&i.AgentID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Priority,
+		&i.Attempt,
+		&i.Risk,
+		&i.Qstatus,
+		&i.LeaseWorkerID,
+		&i.LeaseUntil,
+		&i.MaxAttempts,
+		&i.TimeoutSec,
+		&i.LastError,
+		&i.Result,
+		&i.WorkspacePath,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -93,9 +335,11 @@ func (q *Queries) GetTask(ctx context.Context, id string) (Task, error) {
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, created_at, updated_at FROM task
+SELECT id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at FROM task
 WHERE (?1 = '' OR company_id = ?2)
   AND (?3 = '' OR status = ?4)
+  AND (?5 = '' OR risk = ?6)
+  AND (?7 = -1 OR attempt >= ?7)
 ORDER BY created_at
 `
 
@@ -104,6 +348,9 @@ type ListTasksParams struct {
 	CompanyID     string      `json:"company_id"`
 	StatusFilter  interface{} `json:"status_filter"`
 	Status        string      `json:"status"`
+	RiskFilter    interface{} `json:"risk_filter"`
+	Risk          string      `json:"risk"`
+	AttemptFilter interface{} `json:"attempt_filter"`
 }
 
 func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, error) {
@@ -112,6 +359,9 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 		arg.CompanyID,
 		arg.StatusFilter,
 		arg.Status,
+		arg.RiskFilter,
+		arg.Risk,
+		arg.AttemptFilter,
 	)
 	if err != nil {
 		return nil, err
@@ -132,6 +382,14 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 			&i.Priority,
 			&i.Attempt,
 			&i.Risk,
+			&i.Qstatus,
+			&i.LeaseWorkerID,
+			&i.LeaseUntil,
+			&i.MaxAttempts,
+			&i.TimeoutSec,
+			&i.LastError,
+			&i.Result,
+			&i.WorkspacePath,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -146,4 +404,184 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 		return nil, err
 	}
 	return items, nil
+}
+
+const markTaskRunning = `-- name: MarkTaskRunning :one
+UPDATE task SET qstatus = 'running', status = 'running', updated_at = ? WHERE id = ? RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+`
+
+type MarkTaskRunningParams struct {
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) MarkTaskRunning(ctx context.Context, arg MarkTaskRunningParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, markTaskRunning, arg.UpdatedAt, arg.ID)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.CapabilityID,
+		&i.WorkflowID,
+		&i.AgentID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Priority,
+		&i.Attempt,
+		&i.Risk,
+		&i.Qstatus,
+		&i.LeaseWorkerID,
+		&i.LeaseUntil,
+		&i.MaxAttempts,
+		&i.TimeoutSec,
+		&i.LastError,
+		&i.Result,
+		&i.WorkspacePath,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const recoverLeasedTasks = `-- name: RecoverLeasedTasks :many
+UPDATE task
+SET qstatus = 'ready', status = 'pending', lease_worker_id = '', lease_until = 0, updated_at = ?
+WHERE qstatus = 'leased' AND lease_until != 0 AND lease_until < ?
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+`
+
+type RecoverLeasedTasksParams struct {
+	UpdatedAt  int64 `json:"updated_at"`
+	LeaseUntil int64 `json:"lease_until"`
+}
+
+func (q *Queries) RecoverLeasedTasks(ctx context.Context, arg RecoverLeasedTasksParams) ([]Task, error) {
+	rows, err := q.db.QueryContext(ctx, recoverLeasedTasks, arg.UpdatedAt, arg.LeaseUntil)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Task{}
+	for rows.Next() {
+		var i Task
+		if err := rows.Scan(
+			&i.ID,
+			&i.CompanyID,
+			&i.CapabilityID,
+			&i.WorkflowID,
+			&i.AgentID,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.Priority,
+			&i.Attempt,
+			&i.Risk,
+			&i.Qstatus,
+			&i.LeaseWorkerID,
+			&i.LeaseUntil,
+			&i.MaxAttempts,
+			&i.TimeoutSec,
+			&i.LastError,
+			&i.Result,
+			&i.WorkspacePath,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const requestApprovalTask = `-- name: RequestApprovalTask :one
+UPDATE task
+SET qstatus = 'waiting_approval', status = 'waiting_approval',
+    lease_worker_id = '', lease_until = 0, updated_at = ?
+WHERE id = ?
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+`
+
+type RequestApprovalTaskParams struct {
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) RequestApprovalTask(ctx context.Context, arg RequestApprovalTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, requestApprovalTask, arg.UpdatedAt, arg.ID)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.CapabilityID,
+		&i.WorkflowID,
+		&i.AgentID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Priority,
+		&i.Attempt,
+		&i.Risk,
+		&i.Qstatus,
+		&i.LeaseWorkerID,
+		&i.LeaseUntil,
+		&i.MaxAttempts,
+		&i.TimeoutSec,
+		&i.LastError,
+		&i.Result,
+		&i.WorkspacePath,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const requeueTask = `-- name: RequeueTask :one
+UPDATE task
+SET qstatus = 'ready', status = 'pending', attempt = attempt + 1,
+    lease_worker_id = '', lease_until = 0, last_error = ?, updated_at = ?
+WHERE id = ?
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+`
+
+type RequeueTaskParams struct {
+	LastError string `json:"last_error"`
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) RequeueTask(ctx context.Context, arg RequeueTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, requeueTask, arg.LastError, arg.UpdatedAt, arg.ID)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.CapabilityID,
+		&i.WorkflowID,
+		&i.AgentID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Priority,
+		&i.Attempt,
+		&i.Risk,
+		&i.Qstatus,
+		&i.LeaseWorkerID,
+		&i.LeaseUntil,
+		&i.MaxAttempts,
+		&i.TimeoutSec,
+		&i.LastError,
+		&i.Result,
+		&i.WorkspacePath,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

@@ -54,6 +54,10 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(permissionCmd())
 	root.AddCommand(workflowCmd())
 	root.AddCommand(taskCmd())
+	root.AddCommand(queueCmd())
+	root.AddCommand(executionCmd())
+	root.AddCommand(toolCmd())
+	root.AddCommand(approvalCmd())
 	root.AddCommand(auditCmd())
 	return root
 }
