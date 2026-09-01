@@ -16,11 +16,17 @@ type TaskParams struct {
 	Title        string
 	Description  string
 	Risk         string
+	MaxAttempts  int64
+	TimeoutSec   int64
+	Workspace    string
 }
 
 func (s *Service) CreateTask(ctx context.Context, p TaskParams) (task.Task, error) {
 	if p.Risk == "" {
 		p.Risk = "low"
+	}
+	if p.MaxAttempts == 0 {
+		p.MaxAttempts = 1
 	}
 	now := time.Now().Unix()
 	t := task.Task{
@@ -28,7 +34,9 @@ func (s *Service) CreateTask(ctx context.Context, p TaskParams) (task.Task, erro
 		CapabilityID: p.CapabilityID, WorkflowID: p.WorkflowID, AgentID: p.AgentID,
 		Title: p.Title, Description: p.Description,
 		Status: "pending", Priority: 0, Attempt: 0, Risk: p.Risk,
-		CreatedAt: now, UpdatedAt: now,
+		QStatus: "ready", MaxAttempts: p.MaxAttempts, TimeoutSec: p.TimeoutSec,
+		WorkspacePath: p.Workspace,
+		CreatedAt:     now, UpdatedAt: now,
 	}
 	created, err := s.store.CreateTask(ctx, t)
 	if err != nil {
@@ -38,8 +46,8 @@ func (s *Service) CreateTask(ctx context.Context, p TaskParams) (task.Task, erro
 	return created, err
 }
 
-func (s *Service) ListTasks(ctx context.Context, companyID, status string) ([]task.Task, error) {
-	return s.store.ListTasks(ctx, companyID, status)
+func (s *Service) ListTasks(ctx context.Context, companyID, status, risk string, attemptMin int64) ([]task.Task, error) {
+	return s.store.ListTasks(ctx, companyID, status, risk, attemptMin)
 }
 
 func (s *Service) GetTask(ctx context.Context, id string) (task.Task, error) {
