@@ -72,6 +72,18 @@ type Execution struct {
 	CreatedAt  int64         `json:"created_at"`
 }
 
+type Memory struct {
+	ID        string `json:"id"`
+	CompanyID string `json:"company_id"`
+	Type      string `json:"type"`
+	Title     string `json:"title"`
+	Content   string `json:"content"`
+	Source    string `json:"source"`
+	Tags      string `json:"tags"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
 type Permission struct {
 	ID        string `json:"id"`
 	PolicyID  string `json:"policy_id"`

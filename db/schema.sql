@@ -123,3 +123,17 @@ CREATE TABLE audit (
 );
 
 CREATE INDEX idx_audit_entity ON audit (entity_type, entity_id);
+
+CREATE TABLE memory (
+    id          TEXT PRIMARY KEY,
+    company_id  TEXT NOT NULL REFERENCES company(id),
+    type        TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    content     TEXT NOT NULL,
+    source      TEXT NOT NULL DEFAULT '',
+    tags        TEXT NOT NULL DEFAULT '',
+    created_at  INTEGER NOT NULL,
+    updated_at  INTEGER NOT NULL
+);
+
+CREATE INDEX idx_memory_company ON memory (company_id);
