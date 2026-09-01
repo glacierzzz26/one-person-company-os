@@ -1,0 +1,77 @@
+[
+  {
+    "step": "idea",
+    "title": "产品 Idea",
+    "description": "输入:Idea(起始节点,声明输入,不执行)",
+    "skip": true
+  },
+  {
+    "step": "research",
+    "title": "市场调研",
+    "description": "write research.md\n# 市场调研\n目标市场与用户需求分析(Research capability,框架先行:内容由流程定义提供)",
+    "tool": "file-write",
+    "capability": "research",
+    "agent_role": "market",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "product-analysis",
+    "title": "产品分析",
+    "description": "write analysis.md\n# 产品分析\n需求 → 方案取舍分析(Product capability)",
+    "tool": "file-write",
+    "capability": "product",
+    "agent_role": "analyst",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "prd",
+    "title": "PRD",
+    "description": "write PRD.md\n# PRD\n产品需求文档(Product capability)",
+    "tool": "file-write",
+    "capability": "product",
+    "agent_role": "prd",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "engineering",
+    "title": "Engineering 实现",
+    "description": "write feature.md\n# 实现\n按 PRD 实现(Engineering capability)",
+    "tool": "file-write",
+    "capability": "engineering",
+    "agent_role": "architect",
+    "risk": "medium",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "qa",
+    "title": "QA 校验",
+    "description": "read feature.md",
+    "tool": "file-read",
+    "capability": "engineering",
+    "agent_role": "qa",
+    "risk": "medium",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "approval",
+    "title": "审批门",
+    "description": "审批交付前门:人工确认后放行",
+    "tool": "shell",
+    "agent_role": "",
+    "risk": "high",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "delivery",
+    "title": "Delivery 交付",
+    "description": "git commit -am \"deliver feature\"",
+    "tool": "git",
+    "capability": "engineering",
+    "agent_role": "coding",
+    "risk": "high",
+    "workspace": "<repo-workspace>"
+  }
+]
