@@ -10,6 +10,48 @@ import (
 	"database/sql"
 )
 
+const approveTask = `-- name: ApproveTask :one
+UPDATE task
+SET qstatus = 'ready', status = 'pending',
+    lease_worker_id = '', lease_until = 0, last_error = '', updated_at = ?
+WHERE id = ?
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+`
+
+type ApproveTaskParams struct {
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) ApproveTask(ctx context.Context, arg ApproveTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, approveTask, arg.UpdatedAt, arg.ID)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.CapabilityID,
+		&i.WorkflowID,
+		&i.AgentID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Priority,
+		&i.Attempt,
+		&i.Risk,
+		&i.Qstatus,
+		&i.LeaseWorkerID,
+		&i.LeaseUntil,
+		&i.MaxAttempts,
+		&i.TimeoutSec,
+		&i.LastError,
+		&i.Result,
+		&i.WorkspacePath,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const claimTask = `-- name: ClaimTask :one
 UPDATE task
 SET qstatus = 'leased', lease_worker_id = ?, lease_until = ?, updated_at = ?
@@ -457,6 +499,48 @@ func (q *Queries) RecoverLeasedTasks(ctx context.Context, arg RecoverLeasedTasks
 		return nil, err
 	}
 	return items, nil
+}
+
+const requestApprovalTask = `-- name: RequestApprovalTask :one
+UPDATE task
+SET qstatus = 'waiting_approval', status = 'waiting_approval',
+    lease_worker_id = '', lease_until = 0, updated_at = ?
+WHERE id = ?
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+`
+
+type RequestApprovalTaskParams struct {
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) RequestApprovalTask(ctx context.Context, arg RequestApprovalTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, requestApprovalTask, arg.UpdatedAt, arg.ID)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.CapabilityID,
+		&i.WorkflowID,
+		&i.AgentID,
+		&i.Title,
+		&i.Description,
+		&i.Status,
+		&i.Priority,
+		&i.Attempt,
+		&i.Risk,
+		&i.Qstatus,
+		&i.LeaseWorkerID,
+		&i.LeaseUntil,
+		&i.MaxAttempts,
+		&i.TimeoutSec,
+		&i.LastError,
+		&i.Result,
+		&i.WorkspacePath,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const requeueTask = `-- name: RequeueTask :one

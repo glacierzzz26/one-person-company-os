@@ -18,6 +18,19 @@ type Agent struct {
 	UpdatedAt    int64  `json:"updated_at"`
 }
 
+type Approval struct {
+	ID           string        `json:"id"`
+	TaskID       string        `json:"task_id"`
+	Risk         string        `json:"risk"`
+	Reason       string        `json:"reason"`
+	Status       string        `json:"status"`
+	RequestedBy  string        `json:"requested_by"`
+	DecidedBy    string        `json:"decided_by"`
+	DecisionNote string        `json:"decision_note"`
+	CreatedAt    int64         `json:"created_at"`
+	DecidedAt    sql.NullInt64 `json:"decided_at"`
+}
+
 type Audit struct {
 	ID         string `json:"id"`
 	EntityType string `json:"entity_type"`

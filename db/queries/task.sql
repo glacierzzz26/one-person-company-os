@@ -47,3 +47,17 @@ UPDATE task
 SET qstatus = 'ready', status = 'pending', lease_worker_id = '', lease_until = 0, updated_at = ?
 WHERE qstatus = 'leased' AND lease_until != 0 AND lease_until < ?
 RETURNING *;
+
+-- name: RequestApprovalTask :one
+UPDATE task
+SET qstatus = 'waiting_approval', status = 'waiting_approval',
+    lease_worker_id = '', lease_until = 0, updated_at = ?
+WHERE id = ?
+RETURNING *;
+
+-- name: ApproveTask :one
+UPDATE task
+SET qstatus = 'ready', status = 'pending',
+    lease_worker_id = '', lease_until = 0, last_error = '', updated_at = ?
+WHERE id = ?
+RETURNING *;

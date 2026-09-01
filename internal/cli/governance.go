@@ -22,8 +22,8 @@ func policyAddCmd() *cobra.Command {
 			if companyID == "" || name == "" || kind == "" || statement == "" {
 				return fmt.Errorf("--company, --name, --kind and --statement are required")
 			}
-			if kind != "allow" && kind != "deny" {
-				return fmt.Errorf("--kind must be allow or deny")
+			if kind != "allow" && kind != "deny" && kind != "approval" {
+				return fmt.Errorf("--kind must be allow, deny or approval")
 			}
 			p, err := svc.CreatePolicy(cmd.Context(), companyID, name, kind, statement)
 			if err != nil {

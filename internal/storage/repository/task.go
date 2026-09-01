@@ -130,6 +130,24 @@ func (s *Store) RecoverLeasedTasks(ctx context.Context) ([]task.Task, error) {
 	return out, nil
 }
 
+// RequestApprovalTask 把已领取的 Task 置为 waiting_approval(qstatus 同步,释放租约)。
+func (s *Store) RequestApprovalTask(ctx context.Context, taskID string) (task.Task, error) {
+	row, err := s.q.RequestApprovalTask(ctx, query.RequestApprovalTaskParams{ID: taskID, UpdatedAt: now()})
+	if err != nil {
+		return task.Task{}, err
+	}
+	return toTask(row), nil
+}
+
+// ApproveTask 审批通过:Task 重新入队(ready/pending),由 worker 领取执行。
+func (s *Store) ApproveTask(ctx context.Context, taskID string) (task.Task, error) {
+	row, err := s.q.ApproveTask(ctx, query.ApproveTaskParams{ID: taskID, UpdatedAt: now()})
+	if err != nil {
+		return task.Task{}, err
+	}
+	return toTask(row), nil
+}
+
 func toTask(r query.Task) task.Task {
 	return task.Task{
 		ID: r.ID, CompanyID: r.CompanyID,

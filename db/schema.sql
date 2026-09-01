@@ -96,6 +96,21 @@ CREATE TABLE execution (
 
 CREATE INDEX idx_execution_task ON execution (task_id);
 
+CREATE TABLE approval (
+    id            TEXT PRIMARY KEY,
+    task_id       TEXT NOT NULL REFERENCES task(id),
+    risk          TEXT NOT NULL,
+    reason        TEXT NOT NULL DEFAULT '',
+    status        TEXT NOT NULL DEFAULT 'pending',
+    requested_by  TEXT NOT NULL DEFAULT '',
+    decided_by    TEXT NOT NULL DEFAULT '',
+    decision_note TEXT NOT NULL DEFAULT '',
+    created_at    INTEGER NOT NULL,
+    decided_at    INTEGER
+);
+
+CREATE INDEX idx_approval_task ON approval (task_id);
+
 CREATE TABLE audit (
     id          TEXT PRIMARY KEY,
     entity_type TEXT NOT NULL,
