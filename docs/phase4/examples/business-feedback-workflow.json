@@ -1,0 +1,77 @@
+[
+  {
+    "step": "feedback",
+    "title": "用户反馈",
+    "description": "输入:用户反馈(起始节点,声明输入,不执行)",
+    "skip": true
+  },
+  {
+    "step": "marketing",
+    "title": "Marketing 营销",
+    "description": "write marketing.md\n# 营销调整建议\n分析反馈,输出营销调整方案(Business Capability: marketing)",
+    "tool": "file-write",
+    "capability": "marketing",
+    "agent_role": "campaign",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "sales",
+    "title": "Sales 销售",
+    "description": "write sales.md\n# 跟进方案\n关联客户/线索,输出销售跟进方案(Business Capability: sales)",
+    "tool": "file-write",
+    "capability": "sales",
+    "agent_role": "account",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "customer",
+    "title": "Customer 客户",
+    "description": "write customer.md\n# 支持方案\n输出客户支持/答复方案(Business Capability: customer)",
+    "tool": "file-write",
+    "capability": "customer",
+    "agent_role": "support",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "operations",
+    "title": "Operations 运营",
+    "description": "write operations.md\n# 流程改进建议\n输出流程改进方案(Business Capability: operations)",
+    "tool": "file-write",
+    "capability": "operations",
+    "agent_role": "process",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "finance",
+    "title": "Finance 财务",
+    "description": "write finance.md\n# 财务影响评估\n输出成本/营收影响评估(Business Capability: finance)",
+    "tool": "file-write",
+    "capability": "finance",
+    "agent_role": "reporting",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "approval",
+    "title": "审批门",
+    "description": "审批业务执行前门:人工确认后放行",
+    "tool": "shell",
+    "agent_role": "",
+    "risk": "high",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "delivery",
+    "title": "Delivery 交付",
+    "description": "git commit -am \"deliver business feedback summary\"",
+    "tool": "git",
+    "capability": "operations",
+    "agent_role": "quality",
+    "risk": "high",
+    "workspace": "<repo-workspace>"
+  }
+]
