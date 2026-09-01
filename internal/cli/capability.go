@@ -185,9 +185,11 @@ func workflowRunCmd() *cobra.Command {
 			if worker == "" {
 				worker = "worker-" + uuid.NewString()[:8]
 			}
-			if err := svc.RunWorkflow(cmd.Context(), worker, args[0]); err != nil {
+			summary, err := svc.RunWorkflow(cmd.Context(), worker, args[0], func(line string) { fmt.Println(line) })
+			if err != nil {
 				return err
 			}
+			fmt.Printf("workflow %s: %s\n", args[0], summary)
 			return nil
 		},
 	}

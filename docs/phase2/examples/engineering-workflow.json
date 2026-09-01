@@ -1,0 +1,71 @@
+[
+  {
+    "step": "issue",
+    "title": "Implement greeting",
+    "description": "需求:为 greeting.txt 更新问候语并交付提交",
+    "skip": true
+  },
+  {
+    "step": "analysis",
+    "title": "Analysis",
+    "description": "write ANALYSIS.md\n# Analysis\n分析:更新 greeting.txt 的问候语,涉及实现/测试/评审/交付。",
+    "tool": "file-write",
+    "agent_role": "architect",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "plan",
+    "title": "Plan",
+    "description": "write PLAN.md\n# Plan\n1. 用新问候语覆盖 greeting.txt\n2. 校验内容(测试阶段)\n3. 评审通过后 git commit 交付",
+    "tool": "file-write",
+    "agent_role": "architect",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "implementation",
+    "title": "Implementation",
+    "description": "write greeting.txt\nHello from One-Person Company OS",
+    "tool": "file-write",
+    "agent_role": "coding",
+    "risk": "medium",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "test",
+    "title": "Test",
+    "description": "test -f greeting.txt && grep -q 'Hello from One-Person Company OS' greeting.txt && echo TEST-PASS",
+    "tool": "shell",
+    "agent_role": "qa",
+    "risk": "medium",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "review",
+    "title": "Review",
+    "description": "read greeting.txt",
+    "tool": "file-read",
+    "agent_role": "review",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "approval",
+    "title": "Approval",
+    "description": "审批交付前门:人工确认后放行",
+    "tool": "shell",
+    "agent_role": "",
+    "risk": "high",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "delivery",
+    "title": "Delivery",
+    "description": "git commit -am \"deliver greeting\"",
+    "tool": "git",
+    "agent_role": "coding",
+    "risk": "high",
+    "workspace": "<repo-workspace>"
+  }
+]
