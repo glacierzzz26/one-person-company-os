@@ -28,11 +28,11 @@ func (s *Service) ListCapabilities(ctx context.Context, companyID string) ([]cap
 	return s.store.ListCapabilitiesByCompany(ctx, companyID)
 }
 
-func (s *Service) CreateAgent(ctx context.Context, capabilityID, name, role string) (agent.Agent, error) {
+func (s *Service) CreateAgent(ctx context.Context, capabilityID, name, role, modelHint string) (agent.Agent, error) {
 	now := time.Now().Unix()
 	a := agent.Agent{
 		ID: uuid.NewString(), CapabilityID: capabilityID, Name: name, Role: role,
-		ModelHint: "", CreatedAt: now, UpdatedAt: now,
+		ModelHint: modelHint, CreatedAt: now, UpdatedAt: now,
 	}
 	created, err := s.store.CreateAgent(ctx, a)
 	if err != nil {

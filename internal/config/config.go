@@ -8,7 +8,18 @@ import (
 )
 
 type Config struct {
-	DBPath string `yaml:"db_path"`
+	DBPath    string     `yaml:"db_path"`
+	Providers []Provider `yaml:"providers"`
+}
+
+// Provider 是 config 中声明的 Model Provider。Phase 2 仅声明/展示,不真实调用;
+// api_key_env 指示 API key 所在环境变量名(真实接入时注入)。
+type Provider struct {
+	Name      string `yaml:"name"`
+	Type      string `yaml:"type"`
+	Model     string `yaml:"model"`
+	Endpoint  string `yaml:"endpoint"`
+	APIKeyEnv string `yaml:"api_key_env"`
 }
 
 func Load(path string) (Config, error) {

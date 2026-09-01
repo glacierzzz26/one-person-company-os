@@ -18,8 +18,10 @@ type GitTool struct{}
 
 func init() { Register(&GitTool{}) }
 
-func (g *GitTool) Name() string        { return "git" }
-func (g *GitTool) Description() string { return "在宿主 workspace 内执行本地 git 操作(init/status/add/commit/diff/log 等;网络操作不支持)" }
+func (g *GitTool) Name() string { return "git" }
+func (g *GitTool) Description() string {
+	return "在宿主 workspace 内执行本地 git 操作(init/status/add/commit/diff/log 等;网络操作不支持)"
+}
 
 func (g *GitTool) Permission() Permission {
 	return Permission{Action: "execute", Resource: "git"}

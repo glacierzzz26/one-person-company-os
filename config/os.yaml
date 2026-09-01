@@ -1,1 +1,13 @@
 db_path: ./os.db
+# Phase 2.3:Model Provider 声明(本阶段仅展示,不真实调用;api_key_env 为真实接入时注入的密钥环境变量名)。
+providers:
+  - name: local-mock
+    type: stub
+    model: mock-1
+    endpoint: http://localhost:9999/v1
+    api_key_env: ""
+  - name: anthropic-stub
+    type: stub
+    model: claude-sonnet-5
+    endpoint: https://api.anthropic.com/v1
+    api_key_env: ANTHROPIC_API_KEY

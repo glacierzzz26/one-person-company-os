@@ -16,8 +16,10 @@ type ShellTool struct{}
 
 func init() { Register(&ShellTool{}) }
 
-func (s *ShellTool) Name() string        { return "shell" }
-func (s *ShellTool) Description() string { return "在 Docker 沙箱内执行 shell 命令(无网络、受限资源)" }
+func (s *ShellTool) Name() string { return "shell" }
+func (s *ShellTool) Description() string {
+	return "在 Docker 沙箱内执行 shell 命令(无网络、受限资源)"
+}
 
 // Permission:subject 由调用方按 agent.Role 解析,此处只声明 Action/Resource。
 func (s *ShellTool) Permission() Permission {

@@ -71,7 +71,7 @@ func agentCmd() *cobra.Command {
 }
 
 func agentAddCmd() *cobra.Command {
-	var capabilityID, name, role string
+	var capabilityID, name, role, modelHint string
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add an agent to a capability",
@@ -79,17 +79,18 @@ func agentAddCmd() *cobra.Command {
 			if capabilityID == "" || name == "" || role == "" {
 				return fmt.Errorf("--capability, --name and --role are required")
 			}
-			a, err := svc.CreateAgent(cmd.Context(), capabilityID, name, role)
+			a, err := svc.CreateAgent(cmd.Context(), capabilityID, name, role, modelHint)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("added agent %q\nid: %s\n", a.Name, a.ID)
+			fmt.Printf("added agent %q role=%s model=%s\nid: %s\n", a.Name, a.Role, strOrDashEmpty(a.ModelHint), a.ID)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&capabilityID, "capability", "", "capability id")
 	cmd.Flags().StringVar(&name, "name", "", "agent name")
 	cmd.Flags().StringVar(&role, "role", "", "agent role (architect/coding/qa/review)")
+	cmd.Flags().StringVar(&modelHint, "model", "", "model hint (associate agent with a provider model)")
 	return cmd
 }
 

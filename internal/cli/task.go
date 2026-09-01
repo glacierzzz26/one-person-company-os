@@ -20,9 +20,9 @@ func taskCmd() *cobra.Command {
 func taskCreateCmd() *cobra.Command {
 	var (
 		companyID, title, description, risk, toolName string
-		capabilityID, workflowID, agentID            string
-		workspace                                    string
-		maxAttempts, timeoutSec                      int64
+		capabilityID, workflowID, agentID             string
+		workspace                                     string
+		maxAttempts, timeoutSec                       int64
 	)
 	cmd := &cobra.Command{
 		Use:   "create",

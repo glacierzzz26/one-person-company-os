@@ -21,8 +21,10 @@ func init() {
 	Register(&FileWriteTool{})
 }
 
-func (f *FileReadTool) Name() string        { return "file-read" }
-func (f *FileReadTool) Description() string { return "读取 workspace 内文件内容(相对路径,禁止越界)" }
+func (f *FileReadTool) Name() string { return "file-read" }
+func (f *FileReadTool) Description() string {
+	return "读取 workspace 内文件内容(相对路径,禁止越界)"
+}
 
 func (f *FileReadTool) Permission() Permission {
 	return Permission{Action: "read", Resource: "file"}
@@ -59,8 +61,10 @@ func (f *FileReadTool) Execute(ctx context.Context, t task.Task) (Result, error)
 
 type FileWriteTool struct{}
 
-func (f *FileWriteTool) Name() string        { return "file-write" }
-func (f *FileWriteTool) Description() string { return "写入 workspace 内文件(格式:write <path>\\n<content>,禁止越界)" }
+func (f *FileWriteTool) Name() string { return "file-write" }
+func (f *FileWriteTool) Description() string {
+	return "写入 workspace 内文件(格式:write <path>\\n<content>,禁止越界)"
+}
 
 func (f *FileWriteTool) Permission() Permission {
 	return Permission{Action: "write", Resource: "file"}
