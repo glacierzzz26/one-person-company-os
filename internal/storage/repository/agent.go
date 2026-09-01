@@ -38,6 +38,17 @@ func (s *Store) ListAgentsByCapability(ctx context.Context, capabilityID string)
 	return out, nil
 }
 
+// GetAgentByRole 返回公司下该 role 最早创建的 Agent。无匹配 → ErrNoRows。
+func (s *Store) GetAgentByRole(ctx context.Context, companyID, role string) (agent.Agent, error) {
+	row, err := s.q.GetAgentByRole(ctx, query.GetAgentByRoleParams{
+		CompanyID: companyID, Role: role,
+	})
+	if err != nil {
+		return agent.Agent{}, err
+	}
+	return toAgent(row), nil
+}
+
 func toAgent(r query.Agent) agent.Agent {
 	return agent.Agent{
 		ID: r.ID, CapabilityID: r.CapabilityID, Name: r.Name, Role: r.Role,

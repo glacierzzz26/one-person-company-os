@@ -24,10 +24,10 @@ func auditListCmd() *cobra.Command {
 			rows := [][]string{}
 			for _, a := range list {
 				rows = append(rows, []string{
-					shortID(a.ID), a.EntityType, shortID(a.EntityID), a.Action, a.Actor, fmtTime(a.CreatedAt),
+					shortID(a.ID), a.EntityType, shortID(a.EntityID), a.Action, a.Actor, fmtTime(a.CreatedAt), a.Detail,
 				})
 			}
-			printTable([]string{"ID", "ENTITY", "ENTITY_ID", "ACTION", "ACTOR", "WHEN"}, rows)
+			printTable([]string{"ID", "ENTITY", "ENTITY_ID", "ACTION", "ACTOR", "WHEN", "DETAIL"}, rows)
 			return nil
 		},
 	}
