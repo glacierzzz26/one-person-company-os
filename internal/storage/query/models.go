@@ -59,6 +59,19 @@ type Company struct {
 	UpdatedAt int64  `json:"updated_at"`
 }
 
+type Decision struct {
+	ID        string `json:"id"`
+	CompanyID string `json:"company_id"`
+	Title     string `json:"title"`
+	Kind      string `json:"kind"`
+	Status    string `json:"status"`
+	Body      string `json:"body"`
+	DecidedBy string `json:"decided_by"`
+	Source    string `json:"source"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
 type Execution struct {
 	ID         string        `json:"id"`
 	TaskID     string        `json:"task_id"`

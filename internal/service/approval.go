@@ -102,5 +102,16 @@ func (s *Service) DecideApproval(ctx context.Context, id, decision, note string)
 		return approval.Approval{}, err
 	}
 	_, err = s.audit(ctx, "approval", id, decision, "human:cli", note)
-	return updated, err
+	if err != nil {
+		return updated, err
+	}
+	// 自动记录 Decision(治理链闭环):取 Task 拿 company_id 与标题,失败即报错暴露不一致。
+	t, err := s.store.GetTask(ctx, a.TaskID)
+	if err != nil {
+		return updated, err
+	}
+	if err := s.recordApprovalDecision(ctx, t.CompanyID, "审批 "+status+": "+t.Title, note, id); err != nil {
+		return updated, err
+	}
+	return updated, nil
 }

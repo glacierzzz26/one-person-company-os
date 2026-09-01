@@ -137,3 +137,18 @@ CREATE TABLE memory (
 );
 
 CREATE INDEX idx_memory_company ON memory (company_id);
+
+CREATE TABLE decision (
+    id          TEXT PRIMARY KEY,
+    company_id  TEXT NOT NULL REFERENCES company(id),
+    title       TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    status      TEXT NOT NULL,
+    body        TEXT NOT NULL DEFAULT '',
+    decided_by  TEXT NOT NULL DEFAULT '',
+    source      TEXT NOT NULL DEFAULT '',
+    created_at  INTEGER NOT NULL,
+    updated_at  INTEGER NOT NULL
+);
+
+CREATE INDEX idx_decision_company ON decision (company_id);
