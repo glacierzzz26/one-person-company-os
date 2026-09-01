@@ -56,6 +56,7 @@ Phase 1 让 OS 具备**受控执行能力**(Task Queue / Tool / Sandbox / Workfl
 ### 4.3 Task / Workflow 复用
 
 - 8 阶段每个节点 = 一个 Task(挂 Engineering Workflow),字段沿用 Phase 1:description(command)、agent_role、risk、workspace。
+- **节点新增 `tool` 字段**(定稿后澄清 2026-09-01):指定执行该节点的 Tool 名,默认 `shell`;落库为 `task.tool_name`(迁移 0004)。多 Tool 并存后,引擎按 `tool_name` 取用 Tool(Phase 1 硬编码 shell 的假设取消)。
 - Approval 阶段复用 Phase 1 审批机制(risk=high → waiting_approval)。
 
 ## 5. 存储设计
@@ -70,11 +71,13 @@ Phase 1 让 OS 具备**受控执行能力**(Task Queue / Tool / Sandbox / Workfl
 | Tool | Permission | Risk | 执行方式 | 说明 |
 |---|---|---|---|---|
 | shell | execute/shell | medium | Docker 无网络(现状) | 通用命令 |
-| git | execute/git | low(本地)/high(网络) | **宿主** workspace 内 Git CLI wrapper | init/status/add/commit/diff/log;clone/push 等网络操作后续 + 审批 |
-| file | read+write/file | low | **宿主** workspace 内文件读写 | 受 workspace 边界约束,禁止越界 |
+| git | execute/git | low(本地)/high(网络) | **宿主** workspace 内 Git CLI wrapper | 白名单本地子命令 init/status/add/commit/diff/log/show/branch/config/rev-parse;clone/pull/push/fetch 等网络操作返回不支持(后续 + 审批) |
+| file-read | read/file | low | **宿主** workspace 内读文件 | 受 workspace 边界约束,禁止越界 |
+| file-write | write/file | low | **宿主** workspace 内写文件 | 受 workspace 边界约束,禁止越界 |
 
+- file 按最小权限拆为 file-read / file-write(定稿后澄清 2026-09-01):读只读角色(如 review)只需 read/file,不给写权限;Tool 接口 Permission 为单 action/resource,无法在单 Tool 内表达 read+write。
 - git/file 在**宿主**执行(workspace 即宿主机路径),绕过 Docker 无网络限制;shell 保持无网络沙箱。
-- **file tool 强制 workspace 边界**:目标路径必须位于 task.workspace_path 之下,防目录穿越。
+- **file tool 强制 workspace 边界**:目标路径经 filepath.Clean + filepath.Rel 校验,必须位于 task.workspace_path 之下,防目录穿越。
 
 ## 7. 8 阶段 Workflow(2.2)
 
