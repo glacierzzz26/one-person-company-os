@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/glacierzzz26/one-person-company-os/internal/agent"
 	"github.com/glacierzzz26/one-person-company-os/internal/task"
 	"github.com/glacierzzz26/one-person-company-os/internal/workflow"
 )
@@ -15,11 +16,15 @@ import (
 // State Machine,Task 是执行单元;节点顺序执行,不并行。
 // skip=true 的节点为输入声明(如 Engineering 的 issue),不创建/执行 Task。
 // agent_role 为空的节点是审批门:进入等待审批,人工 approve 后放行(直接完成)。
+// capability 为节点所属 Capability code(如 research/product/engineering):
+// 非空 → Agent 按 (capability, role) 解析、Task 落 capability_id(跨 Capability Workflow);
+// 空 → 回退公司级 role 解析(向后兼容 2.2)。
 type WorkflowNode struct {
 	Step        string `json:"step"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Tool        string `json:"tool"`
+	Capability  string `json:"capability,omitempty"`
 	AgentRole   string `json:"agent_role"`
 	Risk        string `json:"risk"`
 	Workspace   string `json:"workspace"`
@@ -75,13 +80,14 @@ func (s *Service) RunWorkflow(ctx context.Context, workerID, workflowID string, 
 
 // runWorkflowNode 为一个节点创建 Task,并驱动到 completed(或失败中断 workflow)。
 func (s *Service) runWorkflowNode(ctx context.Context, workerID string, w workflow.Workflow, n WorkflowNode, step string, progress func(string)) error {
-	var agentID *string
+	var agentID, capabilityID *string
 	if n.AgentRole != "" {
-		a, err := s.store.GetAgentByRole(ctx, w.CompanyID, n.AgentRole)
+		a, capID, err := s.resolveAgentForNode(ctx, w.CompanyID, n)
 		if err != nil {
-			return fmt.Errorf("step %s: resolve agent for role %q: %w", step, n.AgentRole, err)
+			return fmt.Errorf("step %s: %w", step, err)
 		}
 		agentID = &a.ID
+		capabilityID = &capID
 	}
 	title := n.Title
 	if title == "" {
@@ -101,7 +107,7 @@ func (s *Service) runWorkflowNode(ctx context.Context, workerID string, w workfl
 	}
 
 	t, err := s.CreateTask(ctx, TaskParams{
-		CompanyID: w.CompanyID, WorkflowID: &w.ID, AgentID: agentID,
+		CompanyID: w.CompanyID, WorkflowID: &w.ID, AgentID: agentID, CapabilityID: capabilityID,
 		Title: title, Description: n.Description, ToolName: n.Tool, Risk: risk,
 		MaxAttempts: 1, TimeoutSec: 0, Workspace: ws,
 	})
@@ -111,6 +117,28 @@ func (s *Service) runWorkflowNode(ctx context.Context, workerID string, w workfl
 
 	// 审批门(agent_role 为空):审批通过后无实际执行内容,直接置 completed 放行。
 	return s.driveTaskToCompletion(ctx, workerID, w, t, step, n.AgentRole == "", progress)
+}
+
+// resolveAgentForNode 按节点解析执行 Agent 及其所属 Capability。
+// 节点声明 capability → 按 (company, code) 找 Capability,再按 (capability_id, role) 找 Agent;
+// 未声明 → 回退 2.2 公司级 role 解析,返回该 Agent 的 capability_id。
+func (s *Service) resolveAgentForNode(ctx context.Context, companyID string, n WorkflowNode) (agent.Agent, string, error) {
+	if n.Capability != "" {
+		c, err := s.store.GetCapabilityByCode(ctx, companyID, n.Capability)
+		if err != nil {
+			return agent.Agent{}, "", fmt.Errorf("resolve capability %q: %w", n.Capability, err)
+		}
+		a, err := s.store.GetAgentByCapabilityAndRole(ctx, c.ID, n.AgentRole)
+		if err != nil {
+			return agent.Agent{}, "", fmt.Errorf("resolve agent for role %q in capability %q: %w", n.AgentRole, n.Capability, err)
+		}
+		return a, c.ID, nil
+	}
+	a, err := s.store.GetAgentByRole(ctx, companyID, n.AgentRole)
+	if err != nil {
+		return agent.Agent{}, "", fmt.Errorf("resolve agent for role %q: %w", n.AgentRole, err)
+	}
+	return a, a.CapabilityID, nil
 }
 
 // driveTaskToCompletion 驱动节点 Task 直至 completed,期间处理审批门:

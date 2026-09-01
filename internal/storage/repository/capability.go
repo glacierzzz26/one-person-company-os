@@ -26,6 +26,17 @@ func (s *Store) GetCapability(ctx context.Context, id string) (capability.Capabi
 	return toCapability(row), nil
 }
 
+// GetCapabilityByCode 按 (company_id, code) 查 Capability。无匹配 → ErrNoRows。
+func (s *Store) GetCapabilityByCode(ctx context.Context, companyID, code string) (capability.Capability, error) {
+	row, err := s.q.GetCapabilityByCode(ctx, query.GetCapabilityByCodeParams{
+		CompanyID: companyID, Code: code,
+	})
+	if err != nil {
+		return capability.Capability{}, err
+	}
+	return toCapability(row), nil
+}
+
 func (s *Store) ListCapabilitiesByCompany(ctx context.Context, companyID string) ([]capability.Capability, error) {
 	rows, err := s.q.ListCapabilitiesByCompany(ctx, companyID)
 	if err != nil {

@@ -1,0 +1,32 @@
+[
+  {
+    "step": "research",
+    "title": "市场调研",
+    "description": "write research.md 市场需求",
+    "tool": "file-write",
+    "capability": "research",
+    "agent_role": "market",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "product-analysis",
+    "title": "产品分析",
+    "description": "write analysis.md 方案取舍",
+    "tool": "file-write",
+    "capability": "product",
+    "agent_role": "analyst",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  },
+  {
+    "step": "engineering",
+    "title": "实现",
+    "description": "write code.md 实现方案",
+    "tool": "file-write",
+    "capability": "engineering",
+    "agent_role": "architect",
+    "risk": "low",
+    "workspace": "<repo-workspace>"
+  }
+]

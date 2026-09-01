@@ -67,6 +67,30 @@ func (q *Queries) GetCapability(ctx context.Context, id string) (Capability, err
 	return i, err
 }
 
+const getCapabilityByCode = `-- name: GetCapabilityByCode :one
+SELECT id, company_id, code, name, description, created_at, updated_at FROM capability WHERE company_id = ? AND code = ?
+`
+
+type GetCapabilityByCodeParams struct {
+	CompanyID string `json:"company_id"`
+	Code      string `json:"code"`
+}
+
+func (q *Queries) GetCapabilityByCode(ctx context.Context, arg GetCapabilityByCodeParams) (Capability, error) {
+	row := q.db.QueryRowContext(ctx, getCapabilityByCode, arg.CompanyID, arg.Code)
+	var i Capability
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listCapabilitiesByCompany = `-- name: ListCapabilitiesByCompany :many
 SELECT id, company_id, code, name, description, created_at, updated_at FROM capability WHERE company_id = ? ORDER BY code
 `

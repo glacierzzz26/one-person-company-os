@@ -67,6 +67,34 @@ func (q *Queries) GetAgent(ctx context.Context, id string) (Agent, error) {
 	return i, err
 }
 
+const getAgentByCapabilityAndRole = `-- name: GetAgentByCapabilityAndRole :one
+SELECT a.id, a.capability_id, a.name, a.role, a.model_hint, a.created_at, a.updated_at
+FROM agent a
+WHERE a.capability_id = ? AND a.role = ?
+ORDER BY a.created_at
+LIMIT 1
+`
+
+type GetAgentByCapabilityAndRoleParams struct {
+	CapabilityID string `json:"capability_id"`
+	Role         string `json:"role"`
+}
+
+func (q *Queries) GetAgentByCapabilityAndRole(ctx context.Context, arg GetAgentByCapabilityAndRoleParams) (Agent, error) {
+	row := q.db.QueryRowContext(ctx, getAgentByCapabilityAndRole, arg.CapabilityID, arg.Role)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.CapabilityID,
+		&i.Name,
+		&i.Role,
+		&i.ModelHint,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getAgentByRole = `-- name: GetAgentByRole :one
 SELECT a.id, a.capability_id, a.name, a.role, a.model_hint, a.created_at, a.updated_at
 FROM agent a
