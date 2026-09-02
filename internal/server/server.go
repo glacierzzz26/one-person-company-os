@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/glacierzzz26/one-person-company-os/internal/github"
@@ -19,11 +21,18 @@ import (
 //	GET  /healthz                健康检查
 //	POST /api/webhook/github     GitHub issues webhook(实时优先)→ IntakeIssues 单条
 //
-// 后台轮询 = GitHub 轮询兜底(设计 ≥5 分钟,默认 5;smoke 用 --poll 1)。
-// 通知(飞书)属 6.5。webhook 与轮询都写同一 issue_sync 账本(UNIQUE) → 天然去重。
+// 后台任务:
+//   - 轮询 = GitHub 轮询兜底(设计 ≥5 分钟,默认 5;smoke 用 --poll 1)。
+//   - 每日摘要(6.5,设计 §8「定时 | 每日摘要 9:00」):DigestLoop 到点发昨日摘要(单协程 tick)。
+//
+// 通知(飞书)由 svc 内 notifier 承担(事件点即时 / 摘要定时)。webhook 与轮询都写同一
+// issue_sync 账本(UNIQUE) → 天然去重。
 type Server struct {
 	svc  *service.Service
 	poll time.Duration
+
+	digestEnabled bool
+	digestH, digestM int // 每日摘要时刻(HH:MM,本地时区)
 }
 
 func New(svc *service.Service, pollMinutes int) *Server {
@@ -31,6 +40,88 @@ func New(svc *service.Service, pollMinutes int) *Server {
 		pollMinutes = 5
 	}
 	return &Server{svc: svc, poll: time.Duration(pollMinutes) * time.Minute}
+}
+
+// SetDigestTime 配置每日摘要时刻("HH:MM");传 "off"(或空)关闭定时摘要。
+func (s *Server) SetDigestTime(hhmm string) error {
+	hhmm = strings.TrimSpace(hhmm)
+	if hhmm == "" || strings.EqualFold(hhmm, "off") {
+		s.digestEnabled = false
+		return nil
+	}
+	parts := strings.Split(hhmm, ":")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid digest time %q (want HH:MM)", hhmm)
+	}
+	h, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return fmt.Errorf("invalid digest hour %q: %w", parts[0], err)
+	}
+	m, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return fmt.Errorf("invalid digest minute %q: %w", parts[1], err)
+	}
+	if h < 0 || h > 23 || m < 0 || m > 59 {
+		return fmt.Errorf("digest time %q out of range (HH 0-23, MM 0-59)", hhmm)
+	}
+	s.digestEnabled = true
+	s.digestH, s.digestM = h, m
+	return nil
+}
+
+// DigestEnabled 摘要定时是否开启。
+func (s *Server) DigestEnabled() bool { return s.digestEnabled }
+
+// DigestTime 摘要时刻文本("HH:MM" 或 "off")。
+func (s *Server) DigestTime() string {
+	if !s.digestEnabled {
+		return "off"
+	}
+	return fmt.Sprintf("%02d:%02d", s.digestH, s.digestM)
+}
+
+// DigestLoop 每日摘要调度(单协程 tick,设计 §8「首版单协程 tick」):到本地 digestH:digestM
+// 触发一次 svc.SendDailyDigest,然后重排到次日;失败只记日志不退出。
+func (s *Server) DigestLoop(ctx context.Context) {
+	if !s.digestEnabled {
+		log.Printf("daily digest disabled (digest=%s)", s.DigestTime())
+		return
+	}
+	log.Printf("daily digest scheduled at %02d:%02d (local)", s.digestH, s.digestM)
+	for {
+		next := nextDigestFire(time.Now(), s.digestH, s.digestM)
+		select {
+		case <-ctx.Done():
+			log.Printf("server digest loop stopped")
+			return
+		case <-time.After(time.Until(next)):
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		if err := s.svc.SendDailyDigest(ctx); err != nil {
+			log.Printf("daily digest: %v", err)
+		}
+	}
+}
+
+// RunDigestNow 立即发送一次昨日摘要(冒烟/运维触发;等价 --digest-now)。仅当 server 配了摘要开关。
+func (s *Server) RunDigestNow(ctx context.Context) error {
+	if err := s.svc.SendDailyDigest(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+// nextDigestFire 计算下一次摘要触发时刻:今日 HH:MM 未过(含 2 分钟宽限)→ 今日,否则次日。
+// 纯函数,跨午夜由 Add(24h) 自然处理,供单测断言。
+func nextDigestFire(now time.Time, h, m int) time.Time {
+	loc := now.Location()
+	today := time.Date(now.Year(), now.Month(), now.Day(), h, m, 0, 0, loc)
+	if now.After(today.Add(2 * time.Minute)) {
+		return today.Add(24 * time.Hour)
+	}
+	return today
 }
 
 // Handler 组装 chi 路由。

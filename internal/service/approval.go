@@ -42,8 +42,9 @@ func (s *Service) requestApproval(ctx context.Context, t task.Task, reason strin
 		requestedBy = *t.AgentID
 	}
 	nowUnix := time.Now().Unix()
+	id := uuid.NewString()
 	if _, err := s.store.CreateApproval(ctx, approval.Approval{
-		ID: uuid.NewString(), TaskID: t.ID, Risk: t.Risk, Reason: reason,
+		ID: id, TaskID: t.ID, Risk: t.Risk, Reason: reason,
 		RequestedBy: requestedBy, CreatedAt: nowUnix,
 	}); err != nil {
 		return err
@@ -51,8 +52,12 @@ func (s *Service) requestApproval(ctx context.Context, t task.Task, reason strin
 	if _, err := s.store.RequestApprovalTask(ctx, t.ID); err != nil {
 		return err
 	}
-	_, err := s.audit(ctx, "approval", t.ID, "request", taskActor(t), reason)
-	return err
+	if _, err := s.audit(ctx, "approval", t.ID, "request", taskActor(t), reason); err != nil {
+		return err
+	}
+	// 事件点即时通知(6.5):熔断/planner ask/高险审批门都汇到此处。best-effort,失败只记日志。
+	s.notifyApproval(ctx, t, id, reason)
+	return nil
 }
 
 func (s *Service) ListApprovals(ctx context.Context, status string) ([]approval.Approval, error) {

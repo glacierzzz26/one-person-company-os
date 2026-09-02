@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/glacierzzz26/one-person-company-os/internal/config"
+	"github.com/glacierzzz26/one-person-company-os/internal/notify"
 	"github.com/glacierzzz26/one-person-company-os/internal/service"
 	"github.com/glacierzzz26/one-person-company-os/internal/storage"
 	"github.com/glacierzzz26/one-person-company-os/internal/storage/repository"
@@ -41,6 +42,8 @@ func NewRootCmd() *cobra.Command {
 				return fmt.Errorf("open database: %w", err)
 			}
 			svc = service.New(repository.NewStore(db))
+			// 飞书通知(6.5):OS_FEISHU_WEBHOOK 为空 → NewFromEnv 返回 nil = 禁用(事件点即时 / server 摘要共用)。
+			svc.SetNotifier(notify.NewFromEnv())
 			return nil
 		},
 	}

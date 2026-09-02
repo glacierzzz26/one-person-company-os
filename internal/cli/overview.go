@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/glacierzzz26/one-person-company-os/internal/service"
 	"github.com/spf13/cobra"
 )
 
@@ -42,6 +43,8 @@ func overviewCmd() *cobra.Command {
 			}
 			printTable([]string{"ID", "NAME", "TASK STATUS"}, wfRows)
 			fmt.Println()
+
+			printRDBlock(ov.RD)
 
 			fmt.Println("== Pending Approvals (需要你决策) ==")
 			if len(ov.PendingApprovals) == 0 {
@@ -93,7 +96,7 @@ func overviewCmd() *cobra.Command {
 	return cmd
 }
 
-// statusSummary 把 workflow 的任务状态计数压成 "pending=2 completed=3" 一行。
+// statusSummary 把状态/处置计数压成 "pending=2 completed=3" 一行。
 func statusSummary(m map[string]int64) string {
 	if len(m) == 0 {
 		return "(no tasks)"
@@ -111,4 +114,35 @@ func statusSummary(m map[string]int64) string {
 		out += fmt.Sprintf("%s=%d", k, m[k])
 	}
 	return out
+}
+
+// printRDBlock 渲染研发部(engineering Capability)状态聚合块(Phase 6.5):
+// pending/熔断/待审批/子任务计数 + 熔断与待审批行 + 通道 B intake 账本处置分布。
+func printRDBlock(rd *service.RDOverview) {
+	fmt.Println("== RD: Engineering ==")
+	if rd == nil {
+		fmt.Println("  (no engineering capability)")
+		fmt.Println()
+		return
+	}
+	fmt.Printf("  status: %s\n", statusSummary(rd.ByStatus))
+	fmt.Printf("  fused=%d | waiting_approval=%d | subtasks=%d\n", len(rd.Fused), len(rd.Waiting), rd.SubtaskCount)
+	rdRows := [][]string{}
+	for _, f := range rd.Fused {
+		rdRows = append(rdRows, []string{"fused", shortID(f.ID), firstLine(f.Title),
+			fmt.Sprintf("%d", f.Conflict), firstLine(f.Reason)})
+	}
+	for _, w := range rd.Waiting {
+		rdRows = append(rdRows, []string{"waiting", shortID(w.ID), firstLine(w.Title),
+			fmt.Sprintf("%d", w.Conflict), firstLine(w.Reason)})
+	}
+	if len(rdRows) == 0 {
+		fmt.Println("  (none pending)")
+	} else {
+		printTable([]string{"STATE", "TASK", "TITLE", "CONFLICT", "REASON"}, rdRows)
+	}
+	if len(rd.Ledger) > 0 {
+		fmt.Printf("  intake ledger(%d seen): %s\n", rd.LedgerSeen, statusSummary(rd.Ledger))
+	}
+	fmt.Println()
 }
