@@ -68,6 +68,9 @@ SET qstatus = 'ready', status = 'pending',
 WHERE id = ?
 RETURNING *;
 
+-- name: ListTasksByParent :many
+SELECT * FROM task WHERE parent_task_id = ? ORDER BY created_at ASC;
+
 -- name: ListRecentTasks :many
 SELECT * FROM task
 WHERE company_id = ?

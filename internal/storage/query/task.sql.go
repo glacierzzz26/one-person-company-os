@@ -529,6 +529,61 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 	return items, nil
 }
 
+const listTasksByParent = `-- name: ListTasksByParent :many
+SELECT id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at FROM task WHERE parent_task_id = ? ORDER BY created_at ASC
+`
+
+func (q *Queries) ListTasksByParent(ctx context.Context, parentTaskID sql.NullString) ([]Task, error) {
+	rows, err := q.db.QueryContext(ctx, listTasksByParent, parentTaskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Task{}
+	for rows.Next() {
+		var i Task
+		if err := rows.Scan(
+			&i.ID,
+			&i.CompanyID,
+			&i.CapabilityID,
+			&i.WorkflowID,
+			&i.AgentID,
+			&i.Title,
+			&i.Description,
+			&i.ToolName,
+			&i.Status,
+			&i.Priority,
+			&i.Attempt,
+			&i.Risk,
+			&i.Qstatus,
+			&i.LeaseWorkerID,
+			&i.LeaseUntil,
+			&i.MaxAttempts,
+			&i.TimeoutSec,
+			&i.LastError,
+			&i.Result,
+			&i.WorkspacePath,
+			&i.ParentTaskID,
+			&i.RoundNo,
+			&i.ConflictCount,
+			&i.WriterEndpointID,
+			&i.ReviewerEndpointID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markTaskRunning = `-- name: MarkTaskRunning :one
 UPDATE task SET qstatus = 'running', status = 'running', updated_at = ? WHERE id = ? RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at
 `

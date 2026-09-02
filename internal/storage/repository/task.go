@@ -61,6 +61,19 @@ func (s *Store) ListTasks(ctx context.Context, companyFilter, statusFilter, risk
 	return out, nil
 }
 
+// ListTasksByParent 返回某父任务(planner 拆解父请求)下的全部子任务(创建序)。无子任务 → 空切片。
+func (s *Store) ListTasksByParent(ctx context.Context, parentTaskID string) ([]task.Task, error) {
+	rows, err := s.q.ListTasksByParent(ctx, sql.NullString{String: parentTaskID, Valid: true})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]task.Task, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toTask(r))
+	}
+	return out, nil
+}
+
 // ClaimTask 原子领取指定 Task(qstatus: ready → leased)。未领取到返回 ok=false。
 func (s *Store) ClaimTask(ctx context.Context, taskID, workerID string, leaseUntil int64) (task.Task, bool, error) {
 	row, err := s.q.ClaimTask(ctx, query.ClaimTaskParams{

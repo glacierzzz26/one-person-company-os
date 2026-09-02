@@ -23,7 +23,7 @@ import (
 //	direct_work → create 一条 engineering task(入队)
 //	ask         → 追问(issue 下评论;离线仅落 note)
 //	skip        → 跳过附理由
-//	merge       → 合并批次(planner 拆解属 6.4,先落批注待续)
+//	merge       → 合并批次:create umbrella engineering task(6.4 起,运行期 driver planner 拆解)
 //
 // 处置落 issue_sync 账本(UNIQUE(repo_id, issue_number) 原生去重 → webhook 优先 +
 // 轮询兜底不重复处理)。分诊模型:OS_ENGINE_MODE=scripted → 确定性脚本(离线冒烟);
@@ -133,7 +133,9 @@ func (s *Service) IntakeIssues(ctx context.Context, r osrepo.Repo, issues []gith
 		}
 		var taskID *string
 		switch disp {
-		case engDispDirectWork:
+		case engDispDirectWork, engDispMerge:
+			// 6.4 起 merge 与 direct_work 一样物化 umbrella engineering task 入队:
+			// 大活是否/如何拆解由运行期 driver 的 planner 决定(≤8 拆 / >8 ask_human)。
 			t, terr := s.createIssueTask(ctx, r, it)
 			if terr != nil {
 				errs = append(errs, fmt.Sprintf("#%d: create task: %v", it.Number, terr))
@@ -142,6 +144,9 @@ func (s *Service) IntakeIssues(ctx context.Context, r osrepo.Repo, issues []gith
 			id := t.ID
 			taskID = &id
 			res.CreatedTasks = append(res.CreatedTasks, id)
+			if disp == engDispMerge && note == "" {
+				note = "batched; umbrella task queued — planner decomposes at run"
+			}
 		case engDispAsk:
 			if note == "" {
 				note = "clarification requested (see issue)"
@@ -150,10 +155,6 @@ func (s *Service) IntakeIssues(ctx context.Context, r osrepo.Repo, issues []gith
 		case engDispSkip:
 			if note == "" {
 				note = "skipped (no reason given)"
-			}
-		case engDispMerge:
-			if note == "" {
-				note = "batched: planner decomposition is 6.4, deferred"
 			}
 		}
 		res.ByDisp[disp]++

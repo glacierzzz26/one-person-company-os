@@ -67,6 +67,19 @@ func (s *Service) runEngineering(ctx context.Context, workerID string, t task.Ta
 		}
 	}
 
+	// 6.4 planner 拆解序曲(熔断续跑 humanOverride=true 不再拆):整包请求先过 planner —
+	// direct → 落入下方回合机;split(≤8) → 建子任务同步驱动聚合父任务;
+	// ask(>8/边界不清) → 人工审批(无 bypass)。已拆/已批准 → 续跑或按原样执行。
+	if !humanOverride {
+		handled, perr := s.planEngineering(ctx, runCtx, workerID, t)
+		if perr != nil {
+			return s.engFail(ctx, t, "plan", runCtx, perr)
+		}
+		if handled {
+			return nil
+		}
+	}
+
 	for {
 		// writer 产出(每轮开头;test 免费返工在本轮内复用同一 writer 端点)
 		diff, err := s.runEngPhase(runCtx, workerID, t, engRoleWriter, round, conflict, humanOverride, 0,
