@@ -72,6 +72,22 @@ type Decision struct {
 	UpdatedAt int64  `json:"updated_at"`
 }
 
+type Endpoint struct {
+	ID            string `json:"id"`
+	CompanyID     string `json:"company_id"`
+	Name          string `json:"name"`
+	BaseUrl       string `json:"base_url"`
+	TokenEnc      string `json:"token_enc"`
+	Proto         string `json:"proto"`
+	Vendor        string `json:"vendor"`
+	SelectedModel string `json:"selected_model"`
+	Role          string `json:"role"`
+	Status        string `json:"status"`
+	ModelsCache   string `json:"models_cache"`
+	CreatedAt     int64  `json:"created_at"`
+	UpdatedAt     int64  `json:"updated_at"`
+}
+
 type Execution struct {
 	ID         string        `json:"id"`
 	TaskID     string        `json:"task_id"`

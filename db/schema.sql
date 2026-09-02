@@ -152,3 +152,22 @@ CREATE TABLE decision (
 );
 
 CREATE INDEX idx_decision_company ON decision (company_id);
+
+CREATE TABLE endpoint (
+    id             TEXT PRIMARY KEY,
+    company_id     TEXT NOT NULL REFERENCES company(id),
+    name           TEXT NOT NULL,
+    base_url       TEXT NOT NULL,
+    token_enc      TEXT NOT NULL DEFAULT '',
+    proto          TEXT NOT NULL DEFAULT 'auto',
+    vendor         TEXT NOT NULL DEFAULT '',
+    selected_model TEXT NOT NULL DEFAULT '',
+    role           TEXT NOT NULL DEFAULT 'pool',
+    status         TEXT NOT NULL DEFAULT 'active',
+    models_cache   TEXT NOT NULL DEFAULT '',
+    created_at     INTEGER NOT NULL,
+    updated_at     INTEGER NOT NULL,
+    UNIQUE (company_id, name)
+);
+
+CREATE INDEX idx_endpoint_company ON endpoint (company_id);
