@@ -78,6 +78,11 @@ CREATE TABLE task (
     last_error     TEXT NOT NULL DEFAULT '',
     result         TEXT NOT NULL DEFAULT '',
     workspace_path TEXT NOT NULL DEFAULT '',
+    parent_task_id TEXT REFERENCES task(id),
+    round_no       INTEGER NOT NULL DEFAULT 0,
+    conflict_count INTEGER NOT NULL DEFAULT 0,
+    writer_endpoint_id   TEXT REFERENCES endpoint(id),
+    reviewer_endpoint_id TEXT REFERENCES endpoint(id),
     created_at     INTEGER NOT NULL,
     updated_at     INTEGER NOT NULL
 );

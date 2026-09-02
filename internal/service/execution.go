@@ -68,7 +68,11 @@ func (s *Service) GetExecution(ctx context.Context, id string) (execution.Execut
 // runClaimed 执行已领取的 Task:先判定是否需要人工审批(risk=high 或 approval policy),
 // 需要则置 waiting_approval 不执行;否则做 Tool 权限校验(默认拒绝),未授权则
 // Audit deny 并失败;通过后创建 Execution,在 Tool 沙箱内执行 task.Description。
+// engineering 家族 Task 先分流给 Engineering Driver(回合循环),0-5 语义不变。
 func (s *Service) runClaimed(ctx context.Context, workerID string, t task.Task) error {
+	if isEngineeringTask(t) {
+		return s.runEngineering(ctx, workerID, t)
+	}
 	if need, reason, err := s.needsApproval(ctx, t); err != nil {
 		return err
 	} else if need {

@@ -15,7 +15,7 @@ UPDATE task
 SET qstatus = 'ready', status = 'pending',
     lease_worker_id = '', lease_until = 0, last_error = '', updated_at = ?
 WHERE id = ?
-RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at
 `
 
 type ApproveTaskParams struct {
@@ -47,6 +47,11 @@ func (q *Queries) ApproveTask(ctx context.Context, arg ApproveTaskParams) (Task,
 		&i.LastError,
 		&i.Result,
 		&i.WorkspacePath,
+		&i.ParentTaskID,
+		&i.RoundNo,
+		&i.ConflictCount,
+		&i.WriterEndpointID,
+		&i.ReviewerEndpointID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -57,7 +62,7 @@ const claimTask = `-- name: ClaimTask :one
 UPDATE task
 SET qstatus = 'leased', lease_worker_id = ?, lease_until = ?, updated_at = ?
 WHERE id = ? AND qstatus = 'ready'
-RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at
 `
 
 type ClaimTaskParams struct {
@@ -96,6 +101,11 @@ func (q *Queries) ClaimTask(ctx context.Context, arg ClaimTaskParams) (Task, err
 		&i.LastError,
 		&i.Result,
 		&i.WorkspacePath,
+		&i.ParentTaskID,
+		&i.RoundNo,
+		&i.ConflictCount,
+		&i.WriterEndpointID,
+		&i.ReviewerEndpointID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -103,7 +113,7 @@ func (q *Queries) ClaimTask(ctx context.Context, arg ClaimTaskParams) (Task, err
 }
 
 const completeTask = `-- name: CompleteTask :one
-UPDATE task SET qstatus = 'completed', status = 'completed', result = ?, updated_at = ? WHERE id = ? RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+UPDATE task SET qstatus = 'completed', status = 'completed', result = ?, updated_at = ? WHERE id = ? RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at
 `
 
 type CompleteTaskParams struct {
@@ -136,6 +146,11 @@ func (q *Queries) CompleteTask(ctx context.Context, arg CompleteTaskParams) (Tas
 		&i.LastError,
 		&i.Result,
 		&i.WorkspacePath,
+		&i.ParentTaskID,
+		&i.RoundNo,
+		&i.ConflictCount,
+		&i.WriterEndpointID,
+		&i.ReviewerEndpointID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -143,34 +158,39 @@ func (q *Queries) CompleteTask(ctx context.Context, arg CompleteTaskParams) (Tas
 }
 
 const createTask = `-- name: CreateTask :one
-INSERT INTO task (id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+INSERT INTO task (id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at
 `
 
 type CreateTaskParams struct {
-	ID            string         `json:"id"`
-	CompanyID     string         `json:"company_id"`
-	CapabilityID  sql.NullString `json:"capability_id"`
-	WorkflowID    sql.NullString `json:"workflow_id"`
-	AgentID       sql.NullString `json:"agent_id"`
-	Title         string         `json:"title"`
-	Description   string         `json:"description"`
-	ToolName      string         `json:"tool_name"`
-	Status        string         `json:"status"`
-	Priority      int64          `json:"priority"`
-	Attempt       int64          `json:"attempt"`
-	Risk          string         `json:"risk"`
-	Qstatus       string         `json:"qstatus"`
-	LeaseWorkerID string         `json:"lease_worker_id"`
-	LeaseUntil    int64          `json:"lease_until"`
-	MaxAttempts   int64          `json:"max_attempts"`
-	TimeoutSec    int64          `json:"timeout_sec"`
-	LastError     string         `json:"last_error"`
-	Result        string         `json:"result"`
-	WorkspacePath string         `json:"workspace_path"`
-	CreatedAt     int64          `json:"created_at"`
-	UpdatedAt     int64          `json:"updated_at"`
+	ID                 string         `json:"id"`
+	CompanyID          string         `json:"company_id"`
+	CapabilityID       sql.NullString `json:"capability_id"`
+	WorkflowID         sql.NullString `json:"workflow_id"`
+	AgentID            sql.NullString `json:"agent_id"`
+	Title              string         `json:"title"`
+	Description        string         `json:"description"`
+	ToolName           string         `json:"tool_name"`
+	Status             string         `json:"status"`
+	Priority           int64          `json:"priority"`
+	Attempt            int64          `json:"attempt"`
+	Risk               string         `json:"risk"`
+	Qstatus            string         `json:"qstatus"`
+	LeaseWorkerID      string         `json:"lease_worker_id"`
+	LeaseUntil         int64          `json:"lease_until"`
+	MaxAttempts        int64          `json:"max_attempts"`
+	TimeoutSec         int64          `json:"timeout_sec"`
+	LastError          string         `json:"last_error"`
+	Result             string         `json:"result"`
+	WorkspacePath      string         `json:"workspace_path"`
+	ParentTaskID       sql.NullString `json:"parent_task_id"`
+	RoundNo            int64          `json:"round_no"`
+	ConflictCount      int64          `json:"conflict_count"`
+	WriterEndpointID   sql.NullString `json:"writer_endpoint_id"`
+	ReviewerEndpointID sql.NullString `json:"reviewer_endpoint_id"`
+	CreatedAt          int64          `json:"created_at"`
+	UpdatedAt          int64          `json:"updated_at"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
@@ -195,6 +215,11 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		arg.LastError,
 		arg.Result,
 		arg.WorkspacePath,
+		arg.ParentTaskID,
+		arg.RoundNo,
+		arg.ConflictCount,
+		arg.WriterEndpointID,
+		arg.ReviewerEndpointID,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -220,6 +245,11 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.LastError,
 		&i.Result,
 		&i.WorkspacePath,
+		&i.ParentTaskID,
+		&i.RoundNo,
+		&i.ConflictCount,
+		&i.WriterEndpointID,
+		&i.ReviewerEndpointID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -227,7 +257,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 }
 
 const failTask = `-- name: FailTask :one
-UPDATE task SET qstatus = 'failed', status = 'failed', last_error = ?, updated_at = ? WHERE id = ? RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+UPDATE task SET qstatus = 'failed', status = 'failed', last_error = ?, updated_at = ? WHERE id = ? RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at
 `
 
 type FailTaskParams struct {
@@ -260,6 +290,11 @@ func (q *Queries) FailTask(ctx context.Context, arg FailTaskParams) (Task, error
 		&i.LastError,
 		&i.Result,
 		&i.WorkspacePath,
+		&i.ParentTaskID,
+		&i.RoundNo,
+		&i.ConflictCount,
+		&i.WriterEndpointID,
+		&i.ReviewerEndpointID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -267,7 +302,7 @@ func (q *Queries) FailTask(ctx context.Context, arg FailTaskParams) (Task, error
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at FROM task WHERE id = ?
+SELECT id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at FROM task WHERE id = ?
 `
 
 func (q *Queries) GetTask(ctx context.Context, id string) (Task, error) {
@@ -294,6 +329,11 @@ func (q *Queries) GetTask(ctx context.Context, id string) (Task, error) {
 		&i.LastError,
 		&i.Result,
 		&i.WorkspacePath,
+		&i.ParentTaskID,
+		&i.RoundNo,
+		&i.ConflictCount,
+		&i.WriterEndpointID,
+		&i.ReviewerEndpointID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -304,7 +344,7 @@ const leaseNextTask = `-- name: LeaseNextTask :one
 UPDATE task
 SET qstatus = 'leased', lease_worker_id = ?, lease_until = ?, updated_at = ?
 WHERE id = (SELECT id FROM task WHERE qstatus = 'ready' ORDER BY priority DESC, created_at ASC LIMIT 1)
-RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at
 `
 
 type LeaseNextTaskParams struct {
@@ -337,6 +377,11 @@ func (q *Queries) LeaseNextTask(ctx context.Context, arg LeaseNextTaskParams) (T
 		&i.LastError,
 		&i.Result,
 		&i.WorkspacePath,
+		&i.ParentTaskID,
+		&i.RoundNo,
+		&i.ConflictCount,
+		&i.WriterEndpointID,
+		&i.ReviewerEndpointID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -344,7 +389,7 @@ func (q *Queries) LeaseNextTask(ctx context.Context, arg LeaseNextTaskParams) (T
 }
 
 const listRecentTasks = `-- name: ListRecentTasks :many
-SELECT id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at FROM task
+SELECT id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at FROM task
 WHERE company_id = ?
 ORDER BY created_at DESC
 LIMIT ?
@@ -385,6 +430,11 @@ func (q *Queries) ListRecentTasks(ctx context.Context, arg ListRecentTasksParams
 			&i.LastError,
 			&i.Result,
 			&i.WorkspacePath,
+			&i.ParentTaskID,
+			&i.RoundNo,
+			&i.ConflictCount,
+			&i.WriterEndpointID,
+			&i.ReviewerEndpointID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -402,7 +452,7 @@ func (q *Queries) ListRecentTasks(ctx context.Context, arg ListRecentTasksParams
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at FROM task
+SELECT id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at FROM task
 WHERE (?1 = '' OR company_id = ?2)
   AND (?3 = '' OR status = ?4)
   AND (?5 = '' OR risk = ?6)
@@ -458,6 +508,11 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 			&i.LastError,
 			&i.Result,
 			&i.WorkspacePath,
+			&i.ParentTaskID,
+			&i.RoundNo,
+			&i.ConflictCount,
+			&i.WriterEndpointID,
+			&i.ReviewerEndpointID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -475,7 +530,7 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 }
 
 const markTaskRunning = `-- name: MarkTaskRunning :one
-UPDATE task SET qstatus = 'running', status = 'running', updated_at = ? WHERE id = ? RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+UPDATE task SET qstatus = 'running', status = 'running', updated_at = ? WHERE id = ? RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at
 `
 
 type MarkTaskRunningParams struct {
@@ -507,6 +562,11 @@ func (q *Queries) MarkTaskRunning(ctx context.Context, arg MarkTaskRunningParams
 		&i.LastError,
 		&i.Result,
 		&i.WorkspacePath,
+		&i.ParentTaskID,
+		&i.RoundNo,
+		&i.ConflictCount,
+		&i.WriterEndpointID,
+		&i.ReviewerEndpointID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -517,7 +577,7 @@ const recoverLeasedTasks = `-- name: RecoverLeasedTasks :many
 UPDATE task
 SET qstatus = 'ready', status = 'pending', lease_worker_id = '', lease_until = 0, updated_at = ?
 WHERE qstatus = 'leased' AND lease_until != 0 AND lease_until < ?
-RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at
 `
 
 type RecoverLeasedTasksParams struct {
@@ -555,6 +615,11 @@ func (q *Queries) RecoverLeasedTasks(ctx context.Context, arg RecoverLeasedTasks
 			&i.LastError,
 			&i.Result,
 			&i.WorkspacePath,
+			&i.ParentTaskID,
+			&i.RoundNo,
+			&i.ConflictCount,
+			&i.WriterEndpointID,
+			&i.ReviewerEndpointID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -576,7 +641,7 @@ UPDATE task
 SET qstatus = 'waiting_approval', status = 'waiting_approval',
     lease_worker_id = '', lease_until = 0, updated_at = ?
 WHERE id = ?
-RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at
 `
 
 type RequestApprovalTaskParams struct {
@@ -608,6 +673,11 @@ func (q *Queries) RequestApprovalTask(ctx context.Context, arg RequestApprovalTa
 		&i.LastError,
 		&i.Result,
 		&i.WorkspacePath,
+		&i.ParentTaskID,
+		&i.RoundNo,
+		&i.ConflictCount,
+		&i.WriterEndpointID,
+		&i.ReviewerEndpointID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -619,7 +689,7 @@ UPDATE task
 SET qstatus = 'ready', status = 'pending', attempt = attempt + 1,
     lease_worker_id = '', lease_until = 0, last_error = ?, updated_at = ?
 WHERE id = ?
-RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, created_at, updated_at
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at
 `
 
 type RequeueTaskParams struct {
@@ -652,6 +722,11 @@ func (q *Queries) RequeueTask(ctx context.Context, arg RequeueTaskParams) (Task,
 		&i.LastError,
 		&i.Result,
 		&i.WorkspacePath,
+		&i.ParentTaskID,
+		&i.RoundNo,
+		&i.ConflictCount,
+		&i.WriterEndpointID,
+		&i.ReviewerEndpointID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -693,4 +768,58 @@ func (q *Queries) TaskStatusCountsByWorkflow(ctx context.Context, companyID stri
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateTaskRound = `-- name: UpdateTaskRound :one
+UPDATE task
+SET round_no = ?, conflict_count = ?, updated_at = ?
+WHERE id = ?
+RETURNING id, company_id, capability_id, workflow_id, agent_id, title, description, tool_name, status, priority, attempt, risk, qstatus, lease_worker_id, lease_until, max_attempts, timeout_sec, last_error, result, workspace_path, parent_task_id, round_no, conflict_count, writer_endpoint_id, reviewer_endpoint_id, created_at, updated_at
+`
+
+type UpdateTaskRoundParams struct {
+	RoundNo       int64  `json:"round_no"`
+	ConflictCount int64  `json:"conflict_count"`
+	UpdatedAt     int64  `json:"updated_at"`
+	ID            string `json:"id"`
+}
+
+func (q *Queries) UpdateTaskRound(ctx context.Context, arg UpdateTaskRoundParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, updateTaskRound,
+		arg.RoundNo,
+		arg.ConflictCount,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.CapabilityID,
+		&i.WorkflowID,
+		&i.AgentID,
+		&i.Title,
+		&i.Description,
+		&i.ToolName,
+		&i.Status,
+		&i.Priority,
+		&i.Attempt,
+		&i.Risk,
+		&i.Qstatus,
+		&i.LeaseWorkerID,
+		&i.LeaseUntil,
+		&i.MaxAttempts,
+		&i.TimeoutSec,
+		&i.LastError,
+		&i.Result,
+		&i.WorkspacePath,
+		&i.ParentTaskID,
+		&i.RoundNo,
+		&i.ConflictCount,
+		&i.WriterEndpointID,
+		&i.ReviewerEndpointID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

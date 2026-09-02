@@ -20,7 +20,12 @@ func (s *Store) CreateTask(ctx context.Context, t task.Task) (task.Task, error) 
 		Qstatus: t.QStatus, LeaseWorkerID: t.LeaseWorkerID, LeaseUntil: t.LeaseUntil,
 		MaxAttempts: t.MaxAttempts, TimeoutSec: t.TimeoutSec,
 		LastError: t.LastError, Result: t.Result, WorkspacePath: t.WorkspacePath,
-		CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+		ParentTaskID:       ptrToNull(t.ParentTaskID),
+		RoundNo:            t.RoundNo,
+		ConflictCount:      t.ConflictCount,
+		WriterEndpointID:   ptrToNull(t.WriterEndpointID),
+		ReviewerEndpointID: ptrToNull(t.ReviewerEndpointID),
+		CreatedAt:          t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	})
 	if err != nil {
 		return task.Task{}, err
@@ -193,8 +198,25 @@ func toTask(r query.Task) task.Task {
 		QStatus: r.Qstatus, LeaseWorkerID: r.LeaseWorkerID, LeaseUntil: r.LeaseUntil,
 		MaxAttempts: r.MaxAttempts, TimeoutSec: r.TimeoutSec,
 		LastError: r.LastError, Result: r.Result, WorkspacePath: r.WorkspacePath,
+		ParentTaskID:       nullToPtr(r.ParentTaskID),
+		RoundNo:            r.RoundNo,
+		ConflictCount:      r.ConflictCount,
+		WriterEndpointID:   nullToPtr(r.WriterEndpointID),
+		ReviewerEndpointID: nullToPtr(r.ReviewerEndpointID),
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
+}
+
+// SetTaskRound 更新 Task 回合状态(round_no / conflict_count),Engineering Driver 每次
+// 推进回合后调用;返回更新后的 Task。
+func (s *Store) SetTaskRound(ctx context.Context, taskID string, roundNo, conflictCount int64) (task.Task, error) {
+	row, err := s.q.UpdateTaskRound(ctx, query.UpdateTaskRoundParams{
+		RoundNo: roundNo, ConflictCount: conflictCount, UpdatedAt: now(), ID: taskID,
+	})
+	if err != nil {
+		return task.Task{}, err
+	}
+	return toTask(row), nil
 }
 
 func nullToPtr(s sql.NullString) *string {

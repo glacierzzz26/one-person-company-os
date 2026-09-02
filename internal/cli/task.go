@@ -21,8 +21,9 @@ func taskCreateCmd() *cobra.Command {
 	var (
 		companyID, title, description, risk, toolName string
 		capabilityID, workflowID, agentID             string
-		workspace                                     string
-		maxAttempts, timeoutSec                       int64
+		parentTaskID, writerEndpoint, reviewerEndpoint string
+		workspace                                      string
+		maxAttempts, timeoutSec                        int64
 	)
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -50,6 +51,15 @@ func taskCreateCmd() *cobra.Command {
 			if agentID != "" {
 				p.AgentID = &agentID
 			}
+			if parentTaskID != "" {
+				p.ParentTaskID = &parentTaskID
+			}
+			if writerEndpoint != "" {
+				p.WriterEndpointID = &writerEndpoint
+			}
+			if reviewerEndpoint != "" {
+				p.ReviewerEndpointID = &reviewerEndpoint
+			}
 			t, err := svc.CreateTask(cmd.Context(), p)
 			if err != nil {
 				return err
@@ -60,8 +70,8 @@ func taskCreateCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&companyID, "company", "", "company id")
 	cmd.Flags().StringVar(&title, "title", "", "task title")
-	cmd.Flags().StringVar(&description, "description", "", "task description (tool command: shell command / git subcommand / write <path>... / read <path>)")
-	cmd.Flags().StringVar(&toolName, "tool", "shell", "tool name: shell|git|file-read|file-write")
+	cmd.Flags().StringVar(&description, "description", "", "task description (tool command: shell command / git subcommand / write <path>... / read <path> / engineering: 研发请求)")
+	cmd.Flags().StringVar(&toolName, "tool", "shell", "tool name: shell|git|file-read|file-write|engineering")
 	cmd.Flags().StringVar(&risk, "risk", "low", "low/medium/high")
 	cmd.Flags().Int64Var(&maxAttempts, "max-attempts", 1, "max attempts before terminal failed")
 	cmd.Flags().Int64Var(&timeoutSec, "timeout", 0, "execution timeout in seconds (0 = none)")
@@ -69,6 +79,9 @@ func taskCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&capabilityID, "capability", "", "capability id")
 	cmd.Flags().StringVar(&workflowID, "workflow", "", "workflow id")
 	cmd.Flags().StringVar(&agentID, "agent", "", "agent id")
+	cmd.Flags().StringVar(&parentTaskID, "parent-task", "", "parent task id (planner 拆解子任务)")
+	cmd.Flags().StringVar(&writerEndpoint, "writer-endpoint", "", "writer model endpoint id (engineering)")
+	cmd.Flags().StringVar(&reviewerEndpoint, "reviewer-endpoint", "", "reviewer model endpoint id (engineering; 空回退 writer)")
 	return cmd
 }
 
@@ -111,11 +124,12 @@ func taskShowCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("ID:           %s\nTitle:        %s\nStatus:       %s\nQueueStatus:  %s\nRisk:         %s\nAttempt:      %d\nMaxAttempts:  %d\nCompany:      %s\nCapability:   %s\nWorkflow:     %s\nAgent:        %s\nWorkspace:    %s\nDescription:  %s\nLastError:    %s\nCreated:      %s\n",
+			fmt.Printf("ID:            %s\nTitle:         %s\nStatus:        %s\nQueueStatus:   %s\nRisk:          %s\nAttempt:       %d\nMaxAttempts:   %d\nCompany:       %s\nCapability:    %s\nWorkflow:      %s\nAgent:         %s\nWorkspace:     %s\nParentTask:    %s\nRound:         %d\nConflicts:     %d\nWriterEP:      %s\nReviewerEP:    %s\nDescription:   %s\nLastError:     %s\nCreated:       %s\n",
 				t.ID, t.Title, t.Status, t.QStatus, t.Risk, t.Attempt, t.MaxAttempts,
 				shortID(t.CompanyID), strOrDash(t.CapabilityID), strOrDash(t.WorkflowID),
-				strOrDash(t.AgentID), strOrDashEmpty(t.WorkspacePath), firstLine(t.Description),
-				strOrDashEmpty(t.LastError), fmtTime(t.CreatedAt))
+				strOrDash(t.AgentID), strOrDashEmpty(t.WorkspacePath), strOrDash(t.ParentTaskID),
+				t.RoundNo, t.ConflictCount, strOrDash(t.WriterEndpointID), strOrDash(t.ReviewerEndpointID),
+				firstLine(t.Description), strOrDashEmpty(t.LastError), fmtTime(t.CreatedAt))
 			if t.Status == "completed" && t.Result != "" {
 				fmt.Printf("Result:\n%s\n", t.Result)
 			}

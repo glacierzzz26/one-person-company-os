@@ -12,18 +12,26 @@ import (
 
 // ClaudeCLI 是真调 claude CLI 无头模式(claude -p)的 Provider(Phase 6.1)。
 // 换端点/换模型 = 换环境变量,零改码:ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL。
-// apiKeyEnv 是 API key 所在环境变量名(config 声明),Generate 时实时读取,不落结构体。
+// 凭据两路:apiKeyEnv = API key 所在环境变量名(config 声明),Generate 时实时读取;
+// token(NewClaudeEndpoint 直传,Phase 6.2 endpoint 解密 token)= 已解密明文,优先于 apiKeyEnv。
 type ClaudeCLI struct {
 	name      string
 	model     string
 	endpoint  string
 	apiKeyEnv string
+	token     string
 }
 
 const claudeTimeout = 30 * time.Minute
 
 func NewClaude(name, model, endpoint, apiKeyEnv string) *ClaudeCLI {
 	return &ClaudeCLI{name: name, model: model, endpoint: endpoint, apiKeyEnv: apiKeyEnv}
+}
+
+// NewClaudeEndpoint 由 endpoint 行(base_url + selected_model + 解密 token)构造
+// 真实 Provider;token 为空 = 无鉴权本地端点。
+func NewClaudeEndpoint(name, model, endpoint, token string) *ClaudeCLI {
+	return &ClaudeCLI{name: name, model: model, endpoint: endpoint, token: token}
 }
 
 func (c *ClaudeCLI) Name() string     { return c.name }
@@ -51,8 +59,8 @@ func (c *ClaudeCLI) env() []string {
 	if c.endpoint != "" {
 		out = append(out, "ANTHROPIC_BASE_URL="+c.endpoint)
 	}
-	tok := ""
-	if c.apiKeyEnv != "" {
+	tok := c.token
+	if tok == "" && c.apiKeyEnv != "" {
 		tok = os.Getenv(c.apiKeyEnv)
 	}
 	if tok != "" {

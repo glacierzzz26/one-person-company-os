@@ -20,6 +20,10 @@ type TaskParams struct {
 	MaxAttempts  int64
 	TimeoutSec   int64
 	Workspace    string
+	// Phase 6.2:Engineering 回合字段(可选)。
+	ParentTaskID       *string
+	WriterEndpointID   *string
+	ReviewerEndpointID *string
 }
 
 func (s *Service) CreateTask(ctx context.Context, p TaskParams) (task.Task, error) {
@@ -40,7 +44,10 @@ func (s *Service) CreateTask(ctx context.Context, p TaskParams) (task.Task, erro
 		Status: "pending", Priority: 0, Attempt: 0, Risk: p.Risk,
 		QStatus: "ready", MaxAttempts: p.MaxAttempts, TimeoutSec: p.TimeoutSec,
 		WorkspacePath: p.Workspace,
-		CreatedAt:     now, UpdatedAt: now,
+		ParentTaskID:       p.ParentTaskID,
+		WriterEndpointID:   p.WriterEndpointID,
+		ReviewerEndpointID: p.ReviewerEndpointID,
+		CreatedAt:          now, UpdatedAt: now,
 	}
 	created, err := s.store.CreateTask(ctx, t)
 	if err != nil {

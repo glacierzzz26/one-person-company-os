@@ -134,28 +134,33 @@ type Policy struct {
 }
 
 type Task struct {
-	ID            string         `json:"id"`
-	CompanyID     string         `json:"company_id"`
-	CapabilityID  sql.NullString `json:"capability_id"`
-	WorkflowID    sql.NullString `json:"workflow_id"`
-	AgentID       sql.NullString `json:"agent_id"`
-	Title         string         `json:"title"`
-	Description   string         `json:"description"`
-	ToolName      string         `json:"tool_name"`
-	Status        string         `json:"status"`
-	Priority      int64          `json:"priority"`
-	Attempt       int64          `json:"attempt"`
-	Risk          string         `json:"risk"`
-	Qstatus       string         `json:"qstatus"`
-	LeaseWorkerID string         `json:"lease_worker_id"`
-	LeaseUntil    int64          `json:"lease_until"`
-	MaxAttempts   int64          `json:"max_attempts"`
-	TimeoutSec    int64          `json:"timeout_sec"`
-	LastError     string         `json:"last_error"`
-	Result        string         `json:"result"`
-	WorkspacePath string         `json:"workspace_path"`
-	CreatedAt     int64          `json:"created_at"`
-	UpdatedAt     int64          `json:"updated_at"`
+	ID                 string         `json:"id"`
+	CompanyID          string         `json:"company_id"`
+	CapabilityID       sql.NullString `json:"capability_id"`
+	WorkflowID         sql.NullString `json:"workflow_id"`
+	AgentID            sql.NullString `json:"agent_id"`
+	Title              string         `json:"title"`
+	Description        string         `json:"description"`
+	ToolName           string         `json:"tool_name"`
+	Status             string         `json:"status"`
+	Priority           int64          `json:"priority"`
+	Attempt            int64          `json:"attempt"`
+	Risk               string         `json:"risk"`
+	Qstatus            string         `json:"qstatus"`
+	LeaseWorkerID      string         `json:"lease_worker_id"`
+	LeaseUntil         int64          `json:"lease_until"`
+	MaxAttempts        int64          `json:"max_attempts"`
+	TimeoutSec         int64          `json:"timeout_sec"`
+	LastError          string         `json:"last_error"`
+	Result             string         `json:"result"`
+	WorkspacePath      string         `json:"workspace_path"`
+	ParentTaskID       sql.NullString `json:"parent_task_id"`
+	RoundNo            int64          `json:"round_no"`
+	ConflictCount      int64          `json:"conflict_count"`
+	WriterEndpointID   sql.NullString `json:"writer_endpoint_id"`
+	ReviewerEndpointID sql.NullString `json:"reviewer_endpoint_id"`
+	CreatedAt          int64          `json:"created_at"`
+	UpdatedAt          int64          `json:"updated_at"`
 }
 
 type Workflow struct {
