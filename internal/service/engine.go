@@ -55,12 +55,22 @@ func (s *Service) engCall(ctx context.Context, t task.Task, c engCallCtx) (strin
 	if e.Status != "active" {
 		return "", fmt.Errorf("engineering task %s: endpoint %q status=%s", short8(t.ID), e.Name, e.Status)
 	}
+	out, err := s.modelCall(ctx, e, c.prompt)
+	if err != nil {
+		return "", fmt.Errorf("engineering task %s: %s: %w", short8(t.ID), c.role, err)
+	}
+	return out, nil
+}
+
+// modelCall 对给定端点执行一次真实模型提问(claude -p)。6.2 工程阶段与 6.3
+// intake triage 共用同一真实调用路径。token 解密不入日志。
+func (s *Service) modelCall(ctx context.Context, e endpoint.Endpoint, prompt string) (string, error) {
 	token, err := endpoint.OpenToken(e.TokenEnc)
 	if err != nil {
-		return "", fmt.Errorf("engineering task %s: %s endpoint token: %w", short8(t.ID), c.role, err)
+		return "", err
 	}
 	p := provider.NewClaudeEndpoint(e.Name, e.SelectedModel, e.BaseURL, token)
-	resp, err := p.Generate(ctx, provider.Request{Prompt: c.prompt})
+	resp, err := p.Generate(ctx, provider.Request{Prompt: prompt})
 	if err != nil {
 		return "", err
 	}

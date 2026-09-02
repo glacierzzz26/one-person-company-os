@@ -27,6 +27,11 @@ type TaskParams struct {
 }
 
 func (s *Service) CreateTask(ctx context.Context, p TaskParams) (task.Task, error) {
+	return s.createTask(ctx, p, "human:cli")
+}
+
+// createTask 创建任务并落 Audit。actor 区分来源:human:cli(命令)/ intake(研发 Intake 通道 B)。
+func (s *Service) createTask(ctx context.Context, p TaskParams, actor string) (task.Task, error) {
 	if p.Risk == "" {
 		p.Risk = "low"
 	}
@@ -53,7 +58,7 @@ func (s *Service) CreateTask(ctx context.Context, p TaskParams) (task.Task, erro
 	if err != nil {
 		return task.Task{}, err
 	}
-	_, err = s.audit(ctx, "task", created.ID, "create", "human:cli", "")
+	_, err = s.audit(ctx, "task", created.ID, "create", actor, "")
 	return created, err
 }
 

@@ -101,6 +101,18 @@ type Execution struct {
 	CreatedAt  int64         `json:"created_at"`
 }
 
+type IssueSync struct {
+	ID          string         `json:"id"`
+	CompanyID   string         `json:"company_id"`
+	RepoID      string         `json:"repo_id"`
+	IssueNumber int64          `json:"issue_number"`
+	Title       string         `json:"title"`
+	Disposition string         `json:"disposition"`
+	TaskID      sql.NullString `json:"task_id"`
+	Note        string         `json:"note"`
+	CreatedAt   int64          `json:"created_at"`
+}
+
 type Memory struct {
 	ID        string `json:"id"`
 	CompanyID string `json:"company_id"`
@@ -131,6 +143,15 @@ type Policy struct {
 	Enabled   int64  `json:"enabled"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
+}
+
+type Repo struct {
+	ID            string `json:"id"`
+	CompanyID     string `json:"company_id"`
+	Name          string `json:"name"`
+	RepoUrl       string `json:"repo_url"`
+	WorkspacePath string `json:"workspace_path"`
+	CreatedAt     int64  `json:"created_at"`
 }
 
 type Task struct {

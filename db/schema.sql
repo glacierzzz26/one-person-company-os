@@ -176,3 +176,30 @@ CREATE TABLE endpoint (
 );
 
 CREATE INDEX idx_endpoint_company ON endpoint (company_id);
+
+CREATE TABLE repos (
+    id             TEXT PRIMARY KEY,
+    company_id     TEXT NOT NULL REFERENCES company(id),
+    name           TEXT NOT NULL,
+    repo_url       TEXT NOT NULL,
+    workspace_path TEXT NOT NULL DEFAULT '',
+    created_at     INTEGER NOT NULL,
+    UNIQUE (company_id, name)
+);
+
+CREATE INDEX idx_repos_company ON repos (company_id);
+
+CREATE TABLE issue_sync (
+    id           TEXT PRIMARY KEY,
+    company_id   TEXT NOT NULL REFERENCES company(id),
+    repo_id      TEXT NOT NULL REFERENCES repos(id),
+    issue_number INTEGER NOT NULL,
+    title        TEXT NOT NULL DEFAULT '',
+    disposition  TEXT NOT NULL DEFAULT '',
+    task_id      TEXT,
+    note         TEXT NOT NULL DEFAULT '',
+    created_at   INTEGER NOT NULL,
+    UNIQUE (repo_id, issue_number)
+);
+
+CREATE INDEX idx_issue_sync_repo ON issue_sync (repo_id);

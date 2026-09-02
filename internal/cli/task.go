@@ -124,9 +124,9 @@ func taskShowCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("ID:            %s\nTitle:         %s\nStatus:        %s\nQueueStatus:   %s\nRisk:          %s\nAttempt:       %d\nMaxAttempts:   %d\nCompany:       %s\nCapability:    %s\nWorkflow:      %s\nAgent:         %s\nWorkspace:     %s\nParentTask:    %s\nRound:         %d\nConflicts:     %d\nWriterEP:      %s\nReviewerEP:    %s\nDescription:   %s\nLastError:     %s\nCreated:       %s\n",
+			fmt.Printf("ID:            %s\nTitle:         %s\nStatus:        %s\nQueueStatus:   %s\nRisk:          %s\nAttempt:       %d\nMaxAttempts:   %d\nTool:          %s\nCompany:       %s\nCapability:    %s\nWorkflow:      %s\nAgent:         %s\nWorkspace:     %s\nParentTask:    %s\nRound:         %d\nConflicts:     %d\nWriterEP:      %s\nReviewerEP:    %s\nDescription:   %s\nLastError:     %s\nCreated:       %s\n",
 				t.ID, t.Title, t.Status, t.QStatus, t.Risk, t.Attempt, t.MaxAttempts,
-				shortID(t.CompanyID), strOrDash(t.CapabilityID), strOrDash(t.WorkflowID),
+				t.ToolName, shortID(t.CompanyID), strOrDash(t.CapabilityID), strOrDash(t.WorkflowID),
 				strOrDash(t.AgentID), strOrDashEmpty(t.WorkspacePath), strOrDash(t.ParentTaskID),
 				t.RoundNo, t.ConflictCount, strOrDash(t.WriterEndpointID), strOrDash(t.ReviewerEndpointID),
 				firstLine(t.Description), strOrDashEmpty(t.LastError), fmtTime(t.CreatedAt))
