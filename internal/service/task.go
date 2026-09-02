@@ -30,6 +30,11 @@ func (s *Service) CreateTask(ctx context.Context, p TaskParams) (task.Task, erro
 	return s.createTask(ctx, p, "human:cli")
 }
 
+// CreateTaskAs 同 CreateTask,actor 标来源(human:console = Web 控制台;CLI 用 CreateTask)。
+func (s *Service) CreateTaskAs(ctx context.Context, p TaskParams, actor string) (task.Task, error) {
+	return s.createTask(ctx, p, actor)
+}
+
 // createTask 创建任务并落 Audit。actor 区分来源:human:cli(命令)/ intake(研发 Intake 通道 B)。
 func (s *Service) createTask(ctx context.Context, p TaskParams, actor string) (task.Task, error) {
 	if p.Risk == "" {
@@ -48,7 +53,7 @@ func (s *Service) createTask(ctx context.Context, p TaskParams, actor string) (t
 		Title: p.Title, Description: p.Description, ToolName: p.ToolName,
 		Status: "pending", Priority: 0, Attempt: 0, Risk: p.Risk,
 		QStatus: "ready", MaxAttempts: p.MaxAttempts, TimeoutSec: p.TimeoutSec,
-		WorkspacePath: p.Workspace,
+		WorkspacePath:      p.Workspace,
 		ParentTaskID:       p.ParentTaskID,
 		WriterEndpointID:   p.WriterEndpointID,
 		ReviewerEndpointID: p.ReviewerEndpointID,

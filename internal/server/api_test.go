@@ -284,6 +284,105 @@ func TestAPIGetNotFoundAndBadRequest(t *testing.T) {
 	}
 }
 
+// TestAPIActorConsole 来源贯通(Phase 7.2「不留白」①):/api/v1 写操作审计 actor = human:console。
+func TestAPIActorConsole(t *testing.T) {
+	srv, st := newTestServer(t)
+	ctx := context.Background()
+
+	comp := seedCompany(t, st, "ACME", "")
+	tk := seedTask(t, st, comp.ID, func(tt *task.Task) {
+		tt.Title = "billing migration"
+		tt.Risk = "high"
+		tt.Status = "waiting_approval"
+		tt.QStatus = "waiting_approval"
+	})
+	ap, err := st.CreateApproval(ctx, approval.Approval{
+		ID: uuid.NewString(), TaskID: tk.ID, Risk: "high", Reason: "engineering fuse",
+		Status: "pending", CreatedAt: nowUnix(),
+	})
+	if err != nil {
+		t.Fatalf("seed approval: %v", err)
+	}
+
+	rec, env := doAPI(t, srv.Handler(), http.MethodPost, "/api/v1/approvals/"+ap.ID+"/decision", `{"decision":"approve"}`)
+	if rec.Code != http.StatusOK || !env.OK {
+		t.Fatalf("decision: code=%d env=%+v", rec.Code, env)
+	}
+	got, err := st.GetApproval(ctx, ap.ID)
+	if err != nil {
+		t.Fatalf("get approval: %v", err)
+	}
+	if got.DecidedBy != "human:console" {
+		t.Errorf("approval.decided_by = %q, want human:console", got.DecidedBy)
+	}
+
+	// 自动 decision 同样带来源。
+	ds, err := st.ListDecisions(ctx, comp.ID, "approval")
+	if err != nil || len(ds) != 1 {
+		t.Fatalf("decisions = %+v err=%v, want 1", ds, err)
+	}
+	if ds[0].DecidedBy != "human:console" {
+		t.Errorf("decision.decided_by = %q, want human:console", ds[0].DecidedBy)
+	}
+
+	// 审计:approval 决策 + task 创建两条链都标 human:console。
+	audits, err := srv.svc.ListAudits(ctx, "approval")
+	if err != nil {
+		t.Fatalf("list audits: %v", err)
+	}
+	var approveActed bool
+	for _, a := range audits {
+		if a.EntityID == ap.ID && a.Action == "approve" {
+			approveActed = true
+			if a.Actor != "human:console" {
+				t.Errorf("approval audit actor = %q, want human:console", a.Actor)
+			}
+		}
+	}
+	if !approveActed {
+		t.Errorf("no approve audit for %s in %+v", ap.ID, audits)
+	}
+
+	rec, env = doAPI(t, srv.Handler(), http.MethodPost, "/api/v1/tasks", `{"company_id":"`+comp.ID+`","title":"console task"}`)
+	if rec.Code != http.StatusCreated || !env.OK {
+		t.Fatalf("create task: code=%d env=%+v", rec.Code, env)
+	}
+	var nt task.Task
+	decodeData(t, env, &nt)
+	audits, err = srv.svc.ListAudits(ctx, "task")
+	if err != nil {
+		t.Fatalf("list audits: %v", err)
+	}
+	found := false
+	for _, a := range audits {
+		if a.EntityID == nt.ID && a.Action == "create" {
+			found = true
+			if a.Actor != "human:console" {
+				t.Errorf("task create audit actor = %q, want human:console", a.Actor)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no create audit for task %s", nt.ID)
+	}
+
+	// CLI 路径(actor 缺省)仍是 human:cli,未被 As 变体改动污染。
+	if _, err := srv.svc.CreateTask(ctx, service.TaskParams{CompanyID: comp.ID, Title: "cli task"}); err != nil {
+		t.Fatalf("cli create: %v", err)
+	}
+	audits, _ = srv.svc.ListAudits(ctx, "task")
+	cliFound := false
+	for _, a := range audits {
+		if a.Action == "create" && a.Detail == "" && a.Actor == "human:cli" {
+			// detail 空 = createTask 落审计形态;确认存在 human:cli 链。
+			cliFound = true
+		}
+	}
+	if !cliFound {
+		t.Error("CLI CreateTask should still audit as human:cli")
+	}
+}
+
 // TestAPICreateAndList 写端点 + 组织读:POST task/decision/memory 建出 → 列表可见。
 func TestAPICreateAndList(t *testing.T) {
 	srv, st := newTestServer(t)

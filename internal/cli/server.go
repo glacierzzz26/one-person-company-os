@@ -19,6 +19,8 @@ func serverCmd() *cobra.Command {
 	var port, pollMin int
 	var digest, digestFlag string
 	var digestNow bool
+	var queueWork bool
+	var queueIntervalSec int
 	cmd := &cobra.Command{
 		Use:   "server",
 		Short: "Run the long-lived server (HTTP + GitHub webhook + poll + daily digest; R&D channel B)",
@@ -37,6 +39,10 @@ func serverCmd() *cobra.Command {
 			}
 			// /api/v1 访问令牌(Phase 7.1):设了 OS_API_TOKEN → API 要求 Bearer;空 = 开放。
 			srv.SetAPIToken(os.Getenv("OS_API_TOKEN"))
+			// 队列认领循环(Phase 7.2):--queue-work 开启后 server 自己消费任务(免手动 os queue work)。
+			if queueWork {
+				srv.SetQueueWork(time.Duration(queueIntervalSec) * time.Second)
+			}
 
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -51,10 +57,11 @@ func serverCmd() *cobra.Command {
 			if srv.APITokenSet() {
 				api = "on (OS_API_TOKEN)"
 			}
-			fmt.Printf("feishu notify: %s | daily digest: %s | /api/v1 auth: %s\n", feishu, srv.DigestTime(), api)
+			fmt.Printf("feishu notify: %s | daily digest: %s | /api/v1 auth: %s | queue work: %s\n", feishu, srv.DigestTime(), api, queueWorkStatus(srv))
 
 			go srv.PollLoop(ctx)
 			go srv.DigestLoop(ctx)
+			go srv.QueueLoop(ctx)
 			if digestNow {
 				fmt.Println("sending daily digest now (--digest-now)...")
 				if err := srv.RunDigestNow(ctx); err != nil {
@@ -80,5 +87,15 @@ func serverCmd() *cobra.Command {
 	cmd.Flags().IntVar(&pollMin, "poll", 5, "GitHub issue poll interval in minutes")
 	cmd.Flags().StringVar(&digestFlag, "digest", "", `daily digest time "HH:MM" (default 09:00; "off" to disable)`)
 	cmd.Flags().BoolVar(&digestNow, "digest-now", false, "send the daily digest immediately at boot")
+	cmd.Flags().BoolVar(&queueWork, "queue-work", false, "server consumes the task queue itself (LeaseAndExecute; no manual os queue work)")
+	cmd.Flags().IntVar(&queueIntervalSec, "queue-interval", 10, "queue consumption interval in seconds (with --queue-work)")
 	return cmd
+}
+
+// queueWorkStatus 启动日志的队列循环状态文本(不泄漏执行细节)。
+func queueWorkStatus(srv *server.Server) string {
+	if srv.QueueWorkEnabled() {
+		return "on"
+	}
+	return "off (os queue work drains manually)"
 }

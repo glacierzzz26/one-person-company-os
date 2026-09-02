@@ -5,3 +5,4 @@
 | 文档 | 状态 | 定稿日期 |
 |---|---|---|
 | [web-console.md](web-console.md) | ✅ 定稿 | 2026-09-02 |
+| [console-ui.md](console-ui.md) | ✅ 定稿(7.2;附[可交互原型](console-ui-prototype.html)) | 2026-09-02 |

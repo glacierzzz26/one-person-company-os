@@ -35,13 +35,18 @@ func (s *Service) audit(ctx context.Context, entityType, entityID, action, actor
 }
 
 func (s *Service) CreateCompany(ctx context.Context, name, vision string) (company.Company, error) {
+	return s.CreateCompanyAs(ctx, name, vision, "human:cli")
+}
+
+// CreateCompanyAs 同 CreateCompany,审计 actor 用传入值(如 human:console)。
+func (s *Service) CreateCompanyAs(ctx context.Context, name, vision, actor string) (company.Company, error) {
 	now := time.Now().Unix()
 	c := company.Company{ID: uuid.NewString(), Name: name, Vision: vision, CreatedAt: now, UpdatedAt: now}
 	created, err := s.store.CreateCompany(ctx, c)
 	if err != nil {
 		return company.Company{}, err
 	}
-	_, err = s.audit(ctx, "company", created.ID, "create", "human:cli", "")
+	_, err = s.audit(ctx, "company", created.ID, "create", actor, "")
 	return created, err
 }
 

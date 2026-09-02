@@ -71,6 +71,11 @@ func (s *Service) GetApproval(ctx context.Context, id string) (approval.Approval
 // DecideApproval 由人工(actor=human:cli)对 pending 审批作出决定。
 // approve → Task 重新入队;reject / changes → Task failed(含备注)。
 func (s *Service) DecideApproval(ctx context.Context, id, decision, note string) (approval.Approval, error) {
+	return s.DecideApprovalAs(ctx, id, decision, note, "human:cli")
+}
+
+// DecideApprovalAs 同 DecideApproval,actor 标来源(human:cli 命令行 / human:console Web 控制台)。
+func (s *Service) DecideApprovalAs(ctx context.Context, id, decision, note, actor string) (approval.Approval, error) {
 	a, err := s.store.GetApproval(ctx, id)
 	if err != nil {
 		return approval.Approval{}, err
@@ -102,11 +107,11 @@ func (s *Service) DecideApproval(ctx context.Context, id, decision, note string)
 		status = "rejected"
 	}
 	decidedAt := time.Now().Unix()
-	updated, err := s.store.UpdateApproval(ctx, id, status, "human:cli", note, &decidedAt)
+	updated, err := s.store.UpdateApproval(ctx, id, status, actor, note, &decidedAt)
 	if err != nil {
 		return approval.Approval{}, err
 	}
-	_, err = s.audit(ctx, "approval", id, decision, "human:cli", note)
+	_, err = s.audit(ctx, "approval", id, decision, actor, note)
 	if err != nil {
 		return updated, err
 	}
@@ -115,7 +120,7 @@ func (s *Service) DecideApproval(ctx context.Context, id, decision, note string)
 	if err != nil {
 		return updated, err
 	}
-	if err := s.recordApprovalDecision(ctx, t.CompanyID, "审批 "+status+": "+t.Title, note, id); err != nil {
+	if err := s.recordApprovalDecision(ctx, t.CompanyID, "审批 "+status+": "+t.Title, note, id, actor); err != nil {
 		return updated, err
 	}
 	return updated, nil

@@ -1,7 +1,7 @@
 package approval
 
 // Approval 是人工审批节点。方向基线 6.3:Agent 不得伪造 Approval,
-// 状态仅由人工命令(human:cli)变更。
+// 状态仅由人工变更(human:cli 命令 / human:console 控制台,Phase 7.2 贯通)。
 type Approval struct {
 	ID           string `json:"id"`
 	TaskID       string `json:"task_id"`

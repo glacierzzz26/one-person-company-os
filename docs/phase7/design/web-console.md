@@ -49,7 +49,7 @@ CLI `os overview` 目前是唯一全景入口,且只面向本地终端。要让�
 | 审计 | 审计流(按实体) | `GET /api/v1/audit?entity=` | ✅ |
 | 模型端点池(管理) | 端点列表/详情/新增/选模型/拉模型 | `GET …/endpoints`、`GET /api/v1/endpoints/{id}`、`POST /api/v1/endpoints`、`POST …/{id}/select`、`POST …/{id}/models` | ✅ |
 | 通道 B(仓库账本) | 仓库列表/登记/手动同步 | `GET/POST …/repos`、`POST …/intake/sync` | ✅ |
-| 任务驱动 / 队列 | 认领执行 | — | ❌ `queue work`(CLI) |
+| 任务驱动 / 队列 | 认领执行 | — | ❌ 不经 API(两条 CLI/后台路径:`os queue work` 手动排空 / server `--queue-work` 自驱,7.2 已提供后者) |
 | 模型调用测试 | 直接对话 | — | ❌ 无(CLI/未来控制台单独子阶段) |
 
 ## 五、端点契约(7.1,逐字核对 service 签名)
@@ -127,11 +127,18 @@ CLI `os overview` 目前是唯一全景入口,且只面向本地终端。要让�
 - `OS_API_TOKEN` 在 CLI root 读一次注入 Server 字段(`apiToken string`),便于测试直构 Server。
 - 写请求用端点内联小 struct 解析(JSON strict;缺必填 → 400)。
 
-## 八、子阶段(7.2 起,本阶段不实现)
+## 八、子阶段
 
-- **7.1(本阶段)**:JSON API + 契约冻结 + httptest + 离线 curl 冒烟。
-- **7.2**:React + TypeScript + Ant Design 控制台(愿景 §4.2 基线),消费本契约;embed 进单二进制或
-  分离部署由用户届时定;CORS 若 dev 分离 origin 再加。分页/更多图表/实时刷新届时按需扩展。
+- **7.1(已完成,冻结)**:JSON API + 契约冻结 + httptest + 离线 curl 冒烟(stages/1.md)。
+- **7.2(已完成,冻结)**:控制台 UI 设计定稿([console-ui.md](console-ui.md),方向级)+ 可交互高保真
+  [原型](console-ui-prototype.html)。本轮**回填两处契约缺口**(stages/2.md):
+  ① **actor 来源贯通** —— service 全套写方法出 `*As` 变体,/api/v1 写操作审计 actor 记
+  `human:console`(CLI 保持 `human:cli`,互不污染);② **队列认领循环** —— `os server --queue-work`
+  [默认关,开即每间隔认领排空 `LeaseAndExecute`,worker=server],控制台建的任务可被 server 自动消费
+  (审计 `runtime:server`),不必再手动 `os queue work`。契约其余端点、语义、字段零改动。
+- **7.3(未来)**:React + TypeScript + Ant Design 控制台(愿景 §4.2 基线),按 console-ui.md 交互规格与
+  设计令牌实现,消费本契约;embed 进单二进制或分离部署由用户届时定;CORS 若 dev 分离 origin 再加。
+  分页/更多图表/实时刷新届时按需扩展。
 
 ## 九、验收(7.1)
 

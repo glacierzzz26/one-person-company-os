@@ -36,10 +36,19 @@ type Server struct {
 	digestH, digestM int // 每日摘要时刻(HH:MM,本地时区)
 
 	apiToken string // /api/v1 bearer 校验(OS_API_TOKEN);空 = 开放
+
+	queueInterval time.Duration // 队列认领循环间隔(0 = 关闭;--queue-work 开启)
 }
 
 // SetAPIToken 配置 /api/v1 访问令牌(空 = 不校验)。用于注入 OS_API_TOKEN(CLI)或测试直构。
 func (s *Server) SetAPIToken(tok string) { s.apiToken = tok }
+
+// SetQueueWork 开关队列认领循环:d > 0 = 开启(每 d 回收孤儿租约 + 认领执行直到排空,上限每 tick
+// queueBatchMax 条);0 = 关闭(驱动仍只走 CLI os queue work)。控制台建的任务可被 server 自动消费。
+func (s *Server) SetQueueWork(d time.Duration) { s.queueInterval = d }
+
+// QueueWorkEnabled 队列循环是否开启(CLI 启动日志用)。
+func (s *Server) QueueWorkEnabled() bool { return s.queueInterval > 0 }
 
 // APITokenSet /api/v1 认证是否开启(日志/启动提示用,不泄漏 token)。
 func (s *Server) APITokenSet() bool { return s.apiToken != "" }
@@ -166,6 +175,58 @@ func (s *Server) apiAuth(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// queueBatchMax 是队列循环单 tick 的认领上限(防一次 tick 霸占太久,剩余留给下个 tick)。
+const queueBatchMax = 16
+
+// QueueLoop 队列认领循环(Phase 7.2「不要留白」②):--queue-work 开启后,server 自己消费
+// pending/ready 任务(控制台/审批回队建的任务不必再手动 `os queue work`)。每 tick:
+// 先 RecoverLeasedTasks 回收孤儿租约,再 LeaseAndExecute("server") 直到排空(上限 queueBatchMax)。
+// 单次失败只记日志不退出;lease 30 分钟窗口内多实例并行靠租约互斥,天然安全。
+func (s *Server) QueueLoop(ctx context.Context) {
+	if s.queueInterval <= 0 {
+		log.Printf("queue work disabled (drain via CLI: os queue work)")
+		return
+	}
+	log.Printf("queue work enabled (interval=%s, worker=server)", s.queueInterval)
+	t := time.NewTicker(s.queueInterval)
+	defer t.Stop()
+	for {
+		s.queueOnce(ctx)
+		select {
+		case <-ctx.Done():
+			log.Printf("server queue loop stopped")
+			return
+		case <-t.C:
+		}
+	}
+}
+
+// queueOnce 单 tick:回收孤儿租约 + 排空认领(见 QueueLoop)。ctx 取消立即返回。
+func (s *Server) queueOnce(ctx context.Context) {
+	if ctx.Err() != nil {
+		return
+	}
+	if rec, err := s.svc.RecoverLeasedTasks(ctx); err != nil {
+		log.Printf("queue recover: %v", err)
+	} else if rec > 0 {
+		log.Printf("queue: recovered %d orphan lease(s)", rec)
+	}
+	for n := 0; n < queueBatchMax; n++ {
+		if ctx.Err() != nil {
+			return
+		}
+		id, ok, err := s.svc.LeaseAndExecute(ctx, "server")
+		if err != nil {
+			log.Printf("queue: %v", err)
+			return
+		}
+		if !ok {
+			return
+		}
+		log.Printf("queue: executed task %s", id)
+	}
 }
 
 // PollLoop 后台轮询:启动即兜底同步一次,随后每 poll 间隔 SyncRepos 一次,直到 ctx 结束。

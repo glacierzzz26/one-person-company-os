@@ -9,6 +9,11 @@ import (
 )
 
 func (s *Service) CreateMemory(ctx context.Context, companyID, mtype, title, content, source, tags string) (memory.Memory, error) {
+	return s.CreateMemoryAs(ctx, companyID, mtype, title, content, source, tags, "human:cli")
+}
+
+// CreateMemoryAs 同 CreateMemory,审计 actor 用传入值(如 human:console)。
+func (s *Service) CreateMemoryAs(ctx context.Context, companyID, mtype, title, content, source, tags, actor string) (memory.Memory, error) {
 	now := time.Now().Unix()
 	m := memory.Memory{
 		ID: uuid.NewString(), CompanyID: companyID, Type: mtype, Title: title,
@@ -18,7 +23,7 @@ func (s *Service) CreateMemory(ctx context.Context, companyID, mtype, title, con
 	if err != nil {
 		return memory.Memory{}, err
 	}
-	_, err = s.audit(ctx, "memory", created.ID, "create", "human:cli", mtype)
+	_, err = s.audit(ctx, "memory", created.ID, "create", actor, mtype)
 	return created, err
 }
 

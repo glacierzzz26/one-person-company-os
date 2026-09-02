@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>一人公司 OS 控制台</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#eef1f6; --surface:#ffffff; --surface-2:#f6f8fb; --line:#e2e8f1; --line-2:#cfd8e5;
+  --text:#1c2430; --text-2:#5c6b7f; --text-3:#8d99aa;
+  --accent:#2f54eb; --accent-hi:#2447d0; --accent-soft:#eaefff; --accent-line:#c3cfff;
+  --ok:#1a9e65; --ok-soft:#e5f6ee; --warn:#c9861a; --warn-soft:#faf1df; --crit:#d43b52; --crit-soft:#fbe9ec; --info:#2f54eb;
+  --side-bg:#141a26; --side-bg2:#101725; --side-text:#aebaca; --side-text-hi:#f0f4fa;
+  --shadow:0 1px 2px rgba(28,36,48,.06),0 4px 14px rgba(28,36,48,.07);
+  --r:8px; --r-sm:6px;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e131c; --surface:#161d29; --surface-2:#1b2431; --line:#26303f; --line-2:#33405399;
+    --text:#e6ebf2; --text-2:#9aabbe; --text-3:#6b7a8e;
+    --accent:#6a83ff; --accent-hi:#8397ff; --accent-soft:#1d2547; --accent-line:#33418f;
+    --ok:#3cb782; --ok-soft:#13301f; --warn:#dca845; --warn-soft:#33270f; --crit:#ea6f82; --crit-soft:#3a1620;
+    --side-bg:#0b1018; --side-bg2:#090d13; --side-text:#8fa0b5; --side-text-hi:#eef3fa;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.45);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e131c; --surface:#161d29; --surface-2:#1b2431; --line:#26303f; --line-2:#33405399;
+  --text:#e6ebf2; --text-2:#9aabbe; --text-3:#6b7a8e;
+  --accent:#6a83ff; --accent-hi:#8397ff; --accent-soft:#1d2547; --accent-line:#33418f;
+  --ok:#3cb782; --ok-soft:#13301f; --warn:#dca845; --warn-soft:#33270f; --crit:#ea6f82; --crit-soft:#3a1620;
+  --side-bg:#0b1018; --side-bg2:#090d13; --side-text:#8fa0b5; --side-text-hi:#eef3fa;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.45);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:400 14px/1.6 "Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+::selection{background:var(--accent-soft)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.row{display:flex;align-items:center}
+.gap6{gap:6px}.gap8{gap:8px}.gap12{gap:12px}
+.grow{flex:1}
+.muted{color:var(--text-2)}.dim{color:var(--text-3)}
+/* ============ shell ============ */
+.shell{display:grid;grid-template-columns:224px 1fr;min-height:100vh}
+.side{background:linear-gradient(180deg,var(--side-bg),var(--side-bg2));color:var(--side-text);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{padding:18px 18px 14px;display:flex;gap:10px;align-items:center}
+.brand .mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;
+  display:grid;place-items:center;font-weight:700;font-size:15px;flex:none;box-shadow:0 3px 10px rgba(47,84,235,.4)}
+.brand b{display:block;color:var(--side-text-hi);font-size:15px;letter-spacing:.3px}
+.brand span{font-size:11px;font-family:var(--mono);color:var(--side-text);opacity:.8}
+.nav{padding:6px 10px 14px;flex:1}
+.nav .grp{margin:16px 8px 6px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.55}
+.nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-sm);
+  color:var(--side-text);text-decoration:none;font-size:13.5px;margin:1px 0;position:relative}
+.nav a svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none;opacity:.85}
+.nav a:hover{background:#ffffff12;color:var(--side-text-hi)}
+.nav a.on{background:var(--accent);color:#fff}
+.nav a.on svg{opacity:1}
+.nav .cnt{margin-left:auto;font:500 11px/16px var(--mono);background:#d43b52;color:#fff;
+  border-radius:9px;padding:0 6px;min-width:18px;text-align:center}
+.nav a:not(.on) .cnt{background:var(--crit)}
+.side-foot{padding:12px 16px;border-top:1px solid #ffffff14;font:11px/1.7 var(--mono);opacity:.75}
+.main{min-width:0;display:flex;flex-direction:column}
+.top{position:sticky;top:0;z-index:30;background:var(--surface);border-bottom:1px solid var(--line);
+  padding:0 24px;height:56px;display:flex;align-items:center;gap:14px}
+.company-pick{display:flex;align-items:center;gap:8px;padding:5px 10px;border:1px solid var(--line);
+  border-radius:var(--r-sm);background:var(--surface-2);font-weight:500}
+.company-pick select{border:0;background:transparent;font:inherit;outline:none;cursor:pointer}
+.pill-auth{display:inline-flex;align-items:center;gap:6px;font:11px/1 var(--mono);
+  border:1px solid var(--line);border-radius:99px;padding:5px 10px;color:var(--text-2)}
+.pill-auth i{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none}
+.iconbtn{width:32px;height:32px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--text-2)}
+.iconbtn:hover{background:var(--surface-2);color:var(--text)}
+.iconbtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.content{padding:22px 24px 40px;max-width:1360px;width:100%}
+.page-head{display:flex;align-items:flex-end;gap:12px;margin:2px 0 16px}
+.page-head h1{margin:0;font-size:21px;letter-spacing:.2px}
+.page-head .sub{font-size:12px;color:var(--text-3);font-family:var(--mono)}
+.page-head .acts{margin-left:auto;display:flex;gap:8px}
+.demo-chip{font-size:11px;padding:3px 8px;border-radius:99px;background:var(--warn-soft);color:var(--warn);font-weight:500}
+/* ============ buttons ============ */
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);background:var(--surface);
+  color:var(--text);border-radius:var(--r-sm);padding:6px 13px;font-size:13px;font-weight:500;
+  transition:all .15s ease;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-hi)}
+.btn.danger{color:var(--crit);border-color:var(--crit)}
+.btn.danger:hover{background:var(--crit);color:#fff;border-color:var(--crit)}
+.btn.sm{padding:3px 9px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+/* ============ cards ============ */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.card+.card{margin-top:16px}
+.card .hd{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line)}
+.card .hd h3{margin:0;font-size:14.5px;font-weight:700;letter-spacing:.2px}
+.card .hd .api{margin-left:auto;font:10.5px/1 var(--mono);color:var(--text-3);background:var(--surface-2);
+  border:1px solid var(--line);border-radius:4px;padding:4px 7px;white-space:nowrap}
+.card .bd{padding:14px 16px}
+.card .bd.p0{padding:0}
+.grid{display:grid;gap:16px}
+.cols-2{grid-template-columns:minmax(0,1fr) minmax(0,360px)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin-bottom:16px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:13px 15px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.tile .k{font-size:12px;color:var(--text-2)}
+.tile .v{font:700 26px/1.2 var(--mono);font-variant-numeric:tabular-nums;margin-top:2px}
+.tile .x{font-size:11.5px;color:var(--text-3);margin-top:1px}
+.tile.hot{border-color:var(--crit)}
+.tile.hot::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--crit)}
+.tile.warned{border-color:var(--warn)}
+.tile.warned::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--warn)}
+/* ============ pills / status ============ */
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;border-radius:99px;padding:2px 9px;white-space:nowrap}
+.pill i{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.p-gray{background:var(--surface-2);color:var(--text-2);border:1px solid var(--line)}
+.p-blue{background:var(--accent-soft);color:var(--accent)}
+.p-green{background:var(--ok-soft);color:var(--ok)}
+.p-amber{background:var(--warn-soft);color:var(--warn)}
+.p-red{background:var(--crit-soft);color:var(--crit)}
+.risk-low{color:var(--text-3)}.risk-medium{color:var(--warn)}.risk-high{color:var(--crit);font-weight:700}
+.tag{font:11px/1.5 var(--mono);background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--text-2)}
+/* ============ bars ============ */
+.stackbar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--surface-2)}
+.stackbar div{height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:9px;font-size:12px;color:var(--text-2)}
+.legend b{font-family:var(--mono);font-weight:700;color:var(--text)}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
+.minibar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.minibar div{height:100%;background:var(--accent)}
+/* ============ tables ============ */
+.tblwrap{overflow-x:auto}
+table.tb{width:100%;border-collapse:collapse;font-size:13px}
+.tb th{text-align:left;font-weight:500;color:var(--text-2);font-size:12px;padding:9px 12px;
+  border-bottom:1px solid var(--line);background:var(--surface-2);white-space:nowrap}
+.tb td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tb tr:last-child td{border-bottom:0}
+.tb tbody tr.click{cursor:pointer}
+.tb tbody tr.click:hover td{background:var(--surface-2)}
+.tb .num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tb .idcell{font:11px var(--mono);color:var(--text-3)}
+.tb .t-title{font-weight:500}
+.tb .t-sub{font-size:11.5px;color:var(--text-3);max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ============ lists ============ */
+.list{display:flex;flex-direction:column}
+.list .item{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--line)}
+.list .item:last-child{border-bottom:0}
+.item .meta{font-size:12px;color:var(--text-3);margin-top:1px}
+.fuse{border-left:3px solid var(--crit)}
+.fuse .t-title b{color:var(--crit)}
+.empty{padding:26px;text-align:center;color:var(--text-3);font-size:13px}
+.empty svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:1.5;display:block;margin:0 auto 8px;opacity:.5}
+/* ============ approvals page ============ */
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:var(--r-sm);overflow:hidden;background:var(--surface)}
+.seg button{padding:5px 13px;font-size:12.5px;color:var(--text-2);border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--accent);color:#fff}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line-2);border-radius:99px;padding:3px 12px;font-size:12.5px;color:var(--text-2);background:var(--surface)}
+.chip.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:500}
+.search{display:flex;align-items:center;gap:8px;border:1px solid var(--line-2);border-radius:var(--r-sm);
+  padding:6px 11px;background:var(--surface);min-width:240px}
+.search:focus-within{border-color:var(--accent)}
+.search input{border:0;outline:none;background:transparent;flex:1;font-size:13px}
+.search svg{width:15px;height:15px;stroke:var(--text-3);fill:none;stroke-width:2}
+/* ============ drawer / modal ============ */
+.veil{position:fixed;inset:0;background:rgba(10,14,22,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:60}
+.veil.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,92vw);background:var(--surface);z-index:70;
+  transform:translateX(103%);transition:transform .25s ease;display:flex;flex-direction:column;box-shadow:-8px 0 30px rgba(10,14,22,.25)}
+.drawer.open{transform:none}
+.drawer .dh{display:flex;align-items:center;gap:10px;padding:15px 20px;border-bottom:1px solid var(--line)}
+.drawer .dh h3{margin:0;font-size:16px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drawer .dbody{flex:1;overflow:auto;padding:18px 20px}
+.kv{display:grid;grid-template-columns:112px 1fr;gap:7px 14px;font-size:13px;margin-bottom:16px}
+.kv dt{color:var(--text-3);font-size:12.5px}
+.kv dd{margin:0;word-break:break-all}
+.kv dd .mono{font-size:12px}
+.sect-h{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin:20px 0 10px;font-weight:700}
+.timeline{position:relative;padding-left:16px}
+.timeline::before{content:"";position:absolute;left:4px;top:6px;bottom:6px;width:1px;background:var(--line-2)}
+.tl-i{position:relative;padding:0 0 14px 6px}
+.tl-i::before{content:"";position:absolute;left:-16px;top:6px;width:9px;height:9px;border-radius:50%;
+  background:var(--surface);border:2px solid var(--accent)}
+.tl-i.ok::before{border-color:var(--ok)} .tl-i.bad::before{border-color:var(--crit)}
+.tl-i .tt{font-size:13px;font-weight:500}
+.tl-i .tm{font:11px var(--mono);color:var(--text-3)}
+.tl-i .terr{font-size:12px;color:var(--crit);background:var(--crit-soft);border-radius:5px;padding:4px 8px;margin-top:4px;font-family:var(--mono)}
+.drawer .dfoot{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:10px}
+.modal{position:fixed;inset:0;z-index:80;display:none;place-items:center;padding:20px}
+.modal.open{display:grid}
+.modal .box{width:min(460px,94vw);background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 20px 60px rgba(10,14,22,.35);animation:pop .18s ease}
+@keyframes pop{from{transform:translateY(8px);opacity:0}}
+.modal .mh{display:flex;align-items:center;padding:15px 20px;border-bottom:1px solid var(--line);font-weight:700;font-size:15px}
+.modal .mh .x{margin-left:auto}
+.modal .mb{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.modal .mf{display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--line)}
+.f label{display:block;font-size:12.5px;color:var(--text-2);margin-bottom:5px;font-weight:500}
+.f input[type=text],.f textarea,.f select{width:100%;border:1px solid var(--line-2);border-radius:var(--r-sm);
+  background:var(--surface);padding:7px 10px;outline:none;font-size:13px}
+.f textarea{resize:vertical;min-height:74px}
+.f input:focus,.f textarea:focus,.f select:focus{border-color:var(--accent)}
+.f .hint{font-size:11.5px;color:var(--text-3);margin-top:4px}
+.dec-seg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.dec-seg label{border:1px solid var(--line-2);border-radius:var(--r-sm);padding:9px 6px;text-align:center;cursor:pointer;font-size:13px}
+.dec-seg input{position:absolute;opacity:0;pointer-events:none}
+.dec-seg label small{display:block;font-size:11px;color:var(--text-3);font-weight:400}
+.dec-seg label.sel-a{border-color:var(--ok);background:var(--ok-soft);color:var(--ok);font-weight:700}
+.dec-seg label.sel-r{border-color:var(--crit);background:var(--crit-soft);color:var(--crit);font-weight:700}
+.dec-seg label.sel-c{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:700}
+.note-cli{font-size:12px;color:var(--text-2);background:var(--surface-2);border:1px dashed var(--line-2);
+  border-radius:var(--r-sm);padding:9px 12px;display:flex;gap:8px;align-items:flex-start}
+.note-cli code{font:11px var(--mono);color:var(--accent)}
+/* ============ toast ============ */
+.toasts{position:fixed;right:20px;bottom:20px;z-index:99;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.toast{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:var(--r-sm);box-shadow:var(--shadow);padding:10px 14px;font-size:13px;max-width:360px;
+  display:flex;gap:9px;align-items:flex-start;animation:slidein .25s ease}
+.toast.ok{border-left-color:var(--ok)} .toast.err{border-left-color:var(--crit)}
+.toast .tx{font:11px var(--mono);color:var(--text-3);margin-top:2px}
+@keyframes slidein{from{transform:translateX(30%);opacity:0}}
+/* ============ misc ============ */
+.prog{font-size:12.5px;color:var(--text-2);display:flex;gap:10px;align-items:center;margin:4px 0}
+.prog .pl{width:110px;flex:none;display:flex;justify-content:space-between}
+.prog .pl b{font-family:var(--mono);color:var(--text)}
+.prog .bar{flex:1;max-width:220px}
+.spin{width:14px;height:14px;border:2px solid var(--accent-line);border-top-color:var(--accent);border-radius:50%;
+  animation:sp .7s linear infinite;display:inline-block;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.model-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.foot-status{border-top:1px solid var(--line);background:var(--surface);margin-top:auto;
+  font:11px/1 var(--mono);color:var(--text-3);padding:9px 24px;display:flex;gap:20px}
+.foot-status i{color:var(--ok);font-style:normal}
+.mem-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.mem{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.mem b{font-size:14px}
+.mem p{margin:0;font-size:13px;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.mem .mfoot{display:flex;gap:8px;align-items:center;margin-top:auto;padding-top:6px}
+.agent-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--surface-2);
+  border-radius:99px;padding:3px 11px 3px 4px;font-size:12.5px}
+.agent-chip .av{width:20px;height:20px;border-radius:50%;background:var(--accent-soft);color:var(--accent);
+  display:grid;place-items:center;font:700 10px var(--mono)}
+.cap-line{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--line)}
+.cap-line:last-child{border-bottom:0}
+.cap-line .cc{width:60px;flex:none;font-weight:700;font-size:13px}
+.cap-line .code{font:10.5px var(--mono);color:var(--text-3)}
+.hl{background:var(--warn-soft);color:var(--warn);border-radius:3px;padding:0 2px}
+@media (max-width:1100px){.cols-2{grid-template-columns:1fr}}
+@media (max-width:820px){
+  .shell{grid-template-columns:64px 1fr}
+  .brand b,.brand span,.nav .grp,.nav a span,.side-foot,.pill-auth,.demo-chip{display:none}
+  .page-head{flex-wrap:wrap}
+  .nav a{justify-content:center;padding:10px}
+  .nav .cnt{position:absolute;top:4px;right:8px;margin:0}
+  .content{padding:16px}
+  .top{padding:0 14px}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- ================= sidebar ================= -->
+  <aside class="side">
+    <div class="brand">
+      <div class="mark">OS</div>
+      <div><b>一人公司 OS</b><span>ops console · 7.2</span></div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="grp">驾驶舱</div>
+      <a data-v="overview" class="on"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span>总览</span></a>
+      <div class="grp">人的决策</div>
+      <a data-v="approvals"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg><span>待我审批</span><span class="cnt" id="nav-appr">0</span></a>
+      <a data-v="decisions"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg><span>决策档案</span></a>
+      <div class="grp">执行</div>
+      <a data-v="tasks"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>任务中心</span></a>
+      <a data-v="repos"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M6 8.5v7M18 11.5c0 3-3 4.5-6 4.5"/></svg><span>研发仓库 · 通道 B</span></a>
+      <div class="grp">沉淀</div>
+      <a data-v="memories"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>知识库</span></a>
+      <a data-v="audit"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg><span>审计流水</span></a>
+      <div class="grp">基础设施</div>
+      <a data-v="endpoints"><svg viewBox="0 0 24 24"><path d="M9 2v6M15 2v6"/><path d="M6 8h12v4a6 6 0 0 1-6 6 6 6 0 0 1-6-6z"/><path d="M12 18v4"/></svg><span>模型端点池</span></a>
+    </nav>
+    <div class="side-foot">GET /api/v1/…<br>信封 {ok,data} · snake_case</div>
+  </aside>
+  <!-- ================= main ================= -->
+  <div class="main">
+    <header class="top">
+      <div class="company-pick"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>
+        <select id="comp-sel"><option value="c01">ACME Labs</option><option value="c02">— 示例:另一公司 —</option></select>
+      </div>
+      <span class="demo-chip">示例数据 · 契约同 /api/v1</span>
+      <div class="grow"></div>
+      <span class="pill-auth" id="auth-pill"><i></i>OS_API_TOKEN · Bearer 已配置</span>
+      <button class="iconbtn" id="btn-refresh" title="刷新(重新拉取 overview)"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg></button>
+      <button class="iconbtn" id="btn-theme" title="切换深浅色"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+    </header>
+    <main class="content" id="view"></main>
+    <footer class="foot-status">
+      <span><i>●</i> os server :8787 已连接</span>
+      <span>/healthz ok · 200ms</span>
+      <span id="foot-time"></span>
+    </footer>
+  </div>
+</div>
+<div class="veil" id="veil"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true">
+  <div class="dh"><h3 id="dr-title"></h3>
+    <button class="iconbtn" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="dbody" id="dr-body"></div>
+  <div class="dfoot" id="dr-foot"></div>
+</aside>
+<div class="modal" id="modal"><div class="box">
+  <div class="mh"><span id="md-title"></span><button class="iconbtn x" data-close aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+  <div class="mb" id="md-body"></div>
+  <div class="mf" id="md-foot"></div>
+</div></div>
+<div class="toasts" id="toasts"></div>
+
+<script>
+"use strict";
+/* ================= mock 数据:形状 = /api/v1 契约(snake_case) ================= */
+const now = Date.now()/1000|0, MIN=60, HR=3600, DAY=86400;
+const short = id => id.slice(0,8);
+const data = {
+  company:{id:"c01", name:"ACME Labs", vision:"把重复劳动变成流水线", created_at:now-120*DAY},
+  capabilities:[
+    {id:"cap-eng", code:"engineering", name:"工程", agent_count:4, agents:["架构 Architect","编码 Coding","测试 QA","评审 Review"]},
+    {id:"cap-res", code:"research", name:"研究", agent_count:3, agents:["市场研究","技术雷达","竞品分析"]},
+    {id:"cap-prod", code:"product", name:"产品", agent_count:3, agents:["产品分析","PRD","路线图"]},
+    {id:"cap-mkt", code:"marketing", name:"市场", agent_count:2, agents:["内容","投放"]},
+    {id:"cap-sales", code:"sales", name:"销售", agent_count:2, agents:["线索","跟单"]},
+    {id:"cap-fin", code:"finance", name:"财务", agent_count:1, agents:["记账"]},
+  ],
+  overview:{
+    rd:{
+      capability_id:"cap-eng", total:23,
+      by_status:{pending:4, running:3, waiting_approval:2, completed:12, failed:1, cancelled:1},
+      fused:[{id:"t-flaky", title:"重构会话续期逻辑", status:"waiting_approval", risk:"high", round:4, conflict:3, parent_task_id:null, reason:"engineering fuse: reviewer rejected 3 times"}],
+      waiting:[{id:"t-bill", title:"上线计费迁移 v2", status:"waiting_approval", risk:"high", round:1, conflict:0, parent_task_id:null, reason:"risk=high 审批门"}],
+      subtask_count:6,
+      ledger:{direct_work:9, merge:4, skip:12, ask:1}, ledger_seen:26,
+    },
+    done_7d:[6,9,4,12,8,15,11],
+  },
+  approvals:[
+    {id:"a1", task_id:"t-flaky", task_title:"重构会话续期逻辑", risk:"high", reason:"engineering fuse: reviewer rejected 3 times", status:"pending", requested_by:"agent:review-bot", created_at:now-35*MIN, decided_at:null},
+    {id:"a2", task_id:"t-bill", task_title:"上线计费迁移 v2", risk:"high", reason:"risk=high", status:"pending", requested_by:"workflow:billing-v2", created_at:now-2*HR, decided_at:null},
+    {id:"a3", task_id:"t-batch", task_title:"批量需求 #41 边界不清", risk:"high", reason:"planner ask_human(>8 子任务)", status:"pending", requested_by:"driver:planner", created_at:now-5*HR, decided_at:null},
+    {id:"a4", task_id:"t-export", task_title:"修复导出乱码", risk:"high", reason:"risk=high", status:"approved", requested_by:"workflow:fix-export", created_at:now-DAY, decided_at:now-22*HR, decided_by:"human:cli", decision_note:"影响小,放行"},
+    {id:"a5", task_id:"t-scraper", task_title:"爬取第三方定价", risk:"medium", reason:"engineering fuse: reviewer rejected 3 times", status:"rejected", requested_by:"agent:review-bot", created_at:now-2*DAY, decided_at:now-47*HR, decided_by:"human:cli", decision_note:"法务未过,驳回"},
+  ],
+  tasks:[
+    {id:"t-flaky", title:"重构会话续期逻辑", tool_name:"engineering", status:"waiting_approval", q_status:"waiting_approval", risk:"high", round_no:4, conflict_count:3, capability_id:"cap-eng", workflow_id:null, description:"session 提前过期,引入双 token 静默续期", created_at:now-26*HR, updated_at:now-35*MIN, last_error:null, result:null},
+    {id:"t-bill", title:"上线计费迁移 v2", tool_name:"engineering", status:"waiting_approval", q_status:"waiting_approval", risk:"high", round_no:2, conflict_count:0, capability_id:"cap-eng", workflow_id:"wf-bill", description:"pricing v1 → v2,双写 + 灰度", created_at:now-30*HR, updated_at:now-2*HR, last_error:null, result:null},
+    {id:"t-batch", title:"批量需求 #41(planner ask)", tool_name:"engineering", status:"waiting_approval", q_status:"waiting_approval", risk:"medium", round_no:1, conflict_count:0, capability_id:"cap-eng", workflow_id:null, description:"intake merge 批次,超 8 子任务", created_at:now-5*HR, updated_at:now-5*HR, last_error:null, result:null},
+    {id:"t-r1", title:"双 token 契约设计", tool_name:"engineering", status:"completed", q_status:"completed", risk:"medium", round_no:1, conflict_count:0, capability_id:"cap-eng", workflow_id:null, parent_task_id:"t-flaky", description:"子任务(planner split)", created_at:now-25*HR, updated_at:now-12*HR},
+    {id:"t-r2", title:"实现 refresh 中间件", tool_name:"engineering", status:"completed", q_status:"completed", risk:"medium", round_no:2, conflict_count:1, capability_id:"cap-eng", workflow_id:null, parent_task_id:"t-flaky", description:"子任务(planner split)", created_at:now-25*HR, updated_at:now-6*HR},
+    {id:"t-search", title:"全站搜索灰度", tool_name:"aifix", status:"running", q_status:"leased", risk:"medium", round_no:1, conflict_count:0, capability_id:null, workflow_id:"wf-search", description:"按 §PRD-27 配置 5% 流量", created_at:now-40*MIN, updated_at:now-12*MIN},
+    {id:"t-weekly", title:"周报初稿", tool_name:"file-write", status:"running", q_status:"leased", risk:"low", round_no:1, conflict_count:0, capability_id:null, workflow_id:"wf-weekly", description:"汇总本周任务/决策/账本", created_at:now-8*MIN, updated_at:now-8*MIN},
+    {id:"t-export", title:"修复导出乱码", tool_name:"engineering", status:"completed", q_status:"completed", risk:"high", round_no:3, conflict_count:2, capability_id:"cap-eng", workflow_id:"wf-fix-export", description:"CSV BOM + 转档 iconv", created_at:now-3*DAY, updated_at:now-22*HR},
+    {id:"t-competitor", title:"竞品定价快照", tool_name:"shell", status:"pending", q_status:"ready", risk:"low", round_no:0, conflict_count:0, capability_id:"cap-res", workflow_id:null, description:"周五复盘用", created_at:now-3*HR, updated_at:now-3*HR},
+    {id:"t-scraper", title:"爬取第三方定价", tool_name:"shell", status:"failed", q_status:"dead", risk:"medium", round_no:3, conflict_count:3, capability_id:"cap-res", workflow_id:null, description:"审批驳回 → 终态", created_at:now-2*DAY, updated_at:now-47*HR, last_error:"rejected by human"},
+    {id:"t-invoice", title:"发票 OCR 试点", tool_name:"file-read", status:"cancelled", q_status:"ready", risk:"low", round_no:0, conflict_count:0, capability_id:"cap-fin", workflow_id:null, description:"改采供应方案", created_at:now-9*DAY, updated_at:now-6*DAY},
+  ],
+  executions:{
+    "t-flaky":[
+      {attempt:1, worker:"w1", status:"succeeded", started_at:now-24*HR, finished_at:now-24*HR+42*MIN, error:null, result:"writer: refresh.go + 测试骨架"},
+      {attempt:2, worker:"w1", status:"failed", started_at:now-12*HR, finished_at:now-12*HR+51*MIN, error:"review rejected ×3 → fuse(conflict=3)", result:null},
+      {attempt:3, worker:"w2", status:"succeeded", started_at:now-6*HR, finished_at:now-6*HR+38*MIN, error:null, result:"writer 返工:统一 401 语义;测试通过;评审待放行"},
+    ],
+  },
+  workflows:[
+    {id:"wf-bill", name:"计费迁移 v2", description:"研究→PRD→工程→审批门→交付", status_counts:{completed:5, waiting_approval:1, running:0}},
+    {id:"wf-search", name:"搜索灰度", description:"5% 灰度→观察→放量", status_counts:{running:1, completed:2}},
+    {id:"wf-weekly", name:"每周经营", description:"汇总→周报→发送", status_counts:{running:1, completed:11}},
+  ],
+  decisions:[
+    {id:"d1", kind:"approval", title:"放行:修复导出乱码", status:"made", source:"approval:a4", decided_by:"human:cli", body:"影响小,放行", created_at:now-22*HR},
+    {id:"d2", kind:"approval", title:"驳回:爬取第三方定价", status:"made", source:"approval:a5", decided_by:"human:cli", body:"法务未过,驳回", created_at:now-47*HR},
+    {id:"d3", kind:"strategy", title:"Q3 主打国内市场", status:"made", source:"meeting", decided_by:"human:cli", body:"海外线暂停投放,聚焦国内 SME", created_at:now-4*DAY},
+    {id:"d4", kind:"engineering", title:"熔断阈值维持 3 次", status:"made", source:"cli", decided_by:"human:cli", body:"2 次误伤率过高,3 次平衡", created_at:now-9*DAY},
+    {id:"d5", kind:"strategy", title:"不做多租户", status:"superseded", source:"meeting", decided_by:"human:cli", body:"单算子形态足够", created_at:now-30*DAY},
+  ],
+  memories:[
+    {id:"m1", type:"lesson", title:"审批门要前置", content:"计费迁移在合并前才卡 risk=high,导致返工两次。工程任务应在 planner 拆解时即标注风险节点,审批门提前到设计评审。", source:"task:t-bill", tags:"审批,计费,风险", created_at:now-2*HR},
+    {id:"m2", type:"lesson", title:"评审驳回先补测试", content:"flaky auth 三次驳回的根因都是测试覆盖不足。规则:评审意见含「测试」关键词时,writer 先补测试再改实现。", source:"task:t-flaky", tags:"评审,测试", created_at:now-30*HR},
+    {id:"m3", type:"insight", title:"熔断后的人工放行最有效", content:"近 30 天熔断 7 条,人工 approve 续跑后 6 条一次通过。熔断不是失败信号,是升级信号。", source:"overview", tags:"熔断,审批", created_at:now-3*DAY},
+    {id:"m4", type:"playbook", title:"GitHub issue 分诊口径", content:"带 bug 标且 ≤200 行 → direct_work;跨模块 → merge 成批次;文档/咨询 → skip;边界不清 → ask_human。账本见 issue_sync。", source:"intake", tags:"通道B,分诊", created_at:now-6*DAY},
+    {id:"m5", type:"fact", title:"端点池现状", content:"claude-main(anthropic,planner,claude-opus-5);qwen-pool(openai 网关,pool,未选模型);claude-standby(anthropic,standby 热备,claude-haiku-4-5)。role 取值 pool|planner|standby;密钥仅密文落库,响应无明文。", source:"endpoint", tags:"端点", created_at:now-8*DAY},
+  ],
+  audits:[
+    {id:"g1", entity_type:"task", entity_id:"t-search", action:"claimed", actor:"worker:w2", detail:"leased 300s", created_at:now-12*MIN},
+    {id:"g2", entity_type:"approval", entity_id:"a1", action:"requested", actor:"driver:fuse", detail:"conflict=3 → waiting_approval", created_at:now-35*MIN},
+    {id:"g3", entity_type:"task", entity_id:"t-flaky", action:"rejected", actor:"agent:review-bot", detail:"round 3 评审驳回(第 3 次)", created_at:now-36*MIN},
+    {id:"g4", entity_type:"endpoint", entity_id:"ep1", action:"select", actor:"human:console", detail:"claude-opus-5 role=planner", created_at:now-3*HR},
+    {id:"g5", entity_type:"repo", entity_id:"r1", action:"synced", actor:"server:poll", detail:"12 issues seen, 1 task created", created_at:now-4*HR},
+    {id:"g6", entity_type:"approval", entity_id:"a4", action:"approve", actor:"human:cli", detail:"影响小,放行 · 任务回队", created_at:now-22*HR},
+  ],
+  endpoints:[
+    {id:"ep1", name:"claude-main", proto:"anthropic", vendor:"anthropic", base_url:"https://api.anthropic.com", selected_model:"claude-opus-5", role:"planner", status:"active", has_token:true, models_cache:["claude-opus-5","claude-sonnet-5","claude-haiku-4-5"]},
+    {id:"ep2", name:"qwen-pool", proto:"openai", vendor:"—", base_url:"https://dashscope.aliyuncs.com/compatible-mode/v1", selected_model:"", role:"pool", status:"active", has_token:true, models_cache:["qwen3-max","qwen3-coder-plus"]},
+    {id:"ep3", name:"claude-standby", proto:"anthropic", vendor:"anthropic", base_url:"https://api.anthropic.com", selected_model:"claude-haiku-4-5", role:"standby", status:"active", has_token:true, models_cache:[]},
+  ],
+  repos:[
+    {id:"r1", name:"acme/web", repo_url:"https://github.com/acme/web", workspace_path:"/srv/ws/web", last_sync:now-4*HR, issues_open:5},
+    {id:"r2", name:"acme/core", repo_url:"https://github.com/acme/core", workspace_path:"/srv/ws/core", last_sync:now-4*HR, issues_open:8},
+  ],
+};
+/* ================= helpers ================= */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const pad=n=>String(n).padStart(2,"0");
+function fmtT(ts){const d=new Date(ts*1000);return `${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`}
+function ago(ts){const s=now-ts;if(s<90)return "刚刚";
+  if(s<HR)return Math.round(s/MIN)+" 分钟前";if(s<DAY)return Math.round(s/HR)+" 小时前";return Math.round(s/DAY)+" 天前"}
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function toast(msg,kind,extra){const el=document.createElement("div");el.className="toast"+(kind?" "+kind:"");
+  el.innerHTML=`<div>${esc(msg)}${extra?`<div class="tx">${esc(extra)}</div>`:""}</div>`;
+  $("#toasts").appendChild(el);setTimeout(()=>el.remove(),3800)}
+/* 真实控制台这里 = fetch /api/v1/... + 信封解包 */
+const ST_LABEL={pending:"排队",running:"执行中",waiting_approval:"待审批",completed:"完成",failed:"失败",cancelled:"取消"};
+const ST_PILL={pending:"p-gray",running:"p-blue",waiting_approval:"p-amber",completed:"p-green",failed:"p-red",cancelled:"p-gray"};
+const ST_COLOR={pending:"#8d99aa",running:"#2f54eb",waiting_approval:"#c9861a",completed:"#1a9e65",failed:"#d43b52",cancelled:"#b7c0cc"};
+function stPill(s){return `<span class="pill ${ST_PILL[s]||"p-gray"}"><i></i>${ST_LABEL[s]||s}</span>`}
+function riskPill(r){return `<span class="risk-${r}">${{low:"低",medium:"中",high:"高"}[r]}险</span>`}
+const pendingApprovals=()=>data.approvals.filter(a=>a.status==="pending");
+function updNav(){const n=pendingApprovals().length;$("#nav-appr").textContent=n;$("#nav-appr").style.display=n?"":"none"}
+/* ================= views ================= */
+const views={};
+views.overview=()=>{
+  const rd=data.overview.rd, bs=rd.by_status, total=rd.total;
+  const stack=Object.keys(bs).filter(k=>bs[k]>0).map(k=>`<div style="width:${bs[k]/total*100}%;background:${ST_COLOR[k]}" title="${ST_LABEL[k]} ${bs[k]}"></div>`).join("");
+  const leg=Object.keys(bs).filter(k=>bs[k]>0).map(k=>`<span><i style="background:${ST_COLOR[k]}"></i>${ST_LABEL[k]} <b>${bs[k]}</b></span>`).join("");
+  const L=rd.ledger, lsum=Object.values(L).reduce((a,b)=>a+b,0);
+  const led=[["direct_work","直接做","#1a9e65"],["merge","合并批次","#2f54eb"],["skip","跳过","#8d99aa"],["ask_human","问人","#c9861a"]]
+    .map(([k,z,c])=>`<div class="prog"><span class="pl"><span>${z}</span><b>${L[k]}</b></span><span class="bar minibar"><div style="width:${L[k]/lsum*100}%;background:${c}"></div></span></div>`).join("");
+  const fused=rd.fused.length?rd.fused.map(f=>`
+    <div class="item fuse">
+      <div class="grow"><div class="t-title"><b>🔥 ${esc(f.title)}</b> · 回合 ${f.round} · 冲突 ${f.conflict}</div>
+      <div class="meta mono">${esc(f.reason)}</div></div>
+      <button class="btn sm danger" data-go="approvals">去处理</button>
+    </div>`).join(""):`<div class="empty">无熔断 · 研发部回合机运转正常</div>`;
+  const waiting=rd.waiting.map(f=>`
+    <div class="item"><div class="grow"><div class="t-title">${esc(f.title)}</div><div class="meta mono">${esc(f.reason)}</div></div>
+      <button class="btn sm" data-go="approvals">审批</button></div>`).join("");
+  const appr=pendingApprovals().slice(0,4).map(a=>`
+    <div class="item"><div class="grow"><div class="t-title">${esc(a.task_title)}</div><div class="meta">${esc(a.requested_by)} · ${ago(a.created_at)}</div></div>
+      <button class="btn sm primary" data-decide="${a.id}">决策</button></div>`).join("")||`<div class="empty"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>全部处理完毕</div>`;
+  const recent=data.tasks.filter(t=>!t.parent_task_id).slice(0,6).map(t=>`
+    <tr class="click" data-task="${t.id}"><td class="t-title">${esc(t.title)}</td><td><span class="tag">${t.tool_name}</span></td>
+    <td>${stPill(t.status)}</td><td>${t.risk==="high"?riskPill(t.risk):`<span class="risk-${t.risk}">${{low:"低",medium:"中",high:"高"}[t.risk]}</span>`}</td>
+    <td class="dim" style="font-size:12px">${ago(t.updated_at)}</td></tr>`).join("");
+  const dec=data.decisions.slice(0,3).map(d=>`<div class="item"><div class="grow"><div class="t-title">${esc(d.title)}</div><div class="meta">${d.kind} · ${esc(d.decided_by)} · ${fmtT(d.created_at)}</div></div><span class="tag">${d.status}</span></div>`).join("");
+  return `
+  <div class="page-head"><h1>总览</h1><span class="sub">GET /api/v1/companies/c01/overview · 数据 ${fmtT(now)}</span>
+    <div class="acts"><button class="btn" data-act="sync"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg> 通道 B 同步</button>
+    <button class="btn primary" data-newtask>+ 新建工程请求</button></div></div>
+  <div class="tiles">
+    <div class="tile"><div class="k">进行中任务</div><div class="v">${(bs.running||0)+(bs.pending||0)}</div><div class="x">执行 ${bs.running||0} · 排队 ${bs.pending||0}</div></div>
+    <div class="tile ${pendingApprovals().length?"warned":""}"><div class="k">待我审批</div><div class="v">${pendingApprovals().length}</div><div class="x">点击行内「决策」</div></div>
+    <div class="tile ${rd.fused.length?"hot":""}"><div class="k">研发部熔断</div><div class="v" style="color:${rd.fused.length?"var(--crit)":"inherit"}">${rd.fused.length}</div><div class="x">评审连驳 ≥3 次</div></div>
+    <div class="tile"><div class="k">近 7 日完成</div><div class="v">${data.overview.done_7d.reduce((a,b)=>a+b)}</div><div class="x" id="spark-host" style="display:inline-flex;gap:8px;align-items:center">任务吞吐 <span id="spark"></span></div></div>
+    <div class="tile"><div class="k">issue 账本</div><div class="v">${rd.ledger_seen}</div><div class="x">direct ${rd.ledger.direct_work} · merge ${rd.ledger.merge} · skip ${rd.ledger.skip}</div></div>
+  </div>
+  <div class="grid cols-2">
+    <div>
+      <div class="card"><div class="hd"><h3>研发部 · RD: Engineering</h3><span class="api">overview → data.rd</span></div>
+        <div class="bd">
+          <div class="row gap12"><div class="grow">
+            <div class="row gap8"><b>任务分布</b><span class="dim" style="font-size:12px">total ${rd.total} · 子任务 ${rd.subtask_count}(planner split)</span></div>
+            <div class="stackbar" style="margin-top:8px">${stack}</div><div class="legend">${leg}</div>
+          </div></div>
+          <div class="sect-h">熔断(fused)</div><div class="list" style="border:1px solid var(--line);border-radius:var(--r-sm)">${fused}</div>
+          ${waiting?`<div class="sect-h">待审批门(waiting)</div><div class="list" style="border:1px solid var(--line);border-radius:var(--r-sm)">${waiting}</div>`:""}
+          <div class="sect-h">GitHub issue 处置账本</div>${led}
+          <div class="dim" style="font-size:11.5px;margin-top:6px">POST /api/v1/companies/c01/intake/sync 与 webhook 共写同一账本(UNIQUE 去重)</div>
+        </div></div>
+      <div class="card"><div class="hd"><h3>待我审批</h3><span class="api">GET /approvals?status=pending</span><div class="grow"></div><button class="btn sm" data-go="approvals">审批中心 →</button></div>
+        <div class="p0 list">${appr}</div></div>
+      <div class="card"><div class="hd"><h3>最近任务</h3><span class="api">GET /tasks?company=c01</span><div class="grow"></div><button class="btn sm" data-go="tasks">任务中心 →</button></div>
+        <div class="tblwrap"><table class="tb"><thead><tr><th>标题</th><th>工具</th><th>状态</th><th>风险</th><th>更新</th></tr></thead><tbody>${recent}</tbody></table></div></div>
+    </div>
+    <div>
+      <div class="card"><div class="hd"><h3>能力域 × Agent</h3><span class="api">GET /companies/{id}/capabilities</span></div>
+        <div class="p0">${data.capabilities.map(c=>`<div class="cap-line"><span class="cc">${c.name}</span><span class="code grow">${c.code}</span><span class="dim" style="font-size:12px">${c.agent_count} agents</span></div>`).join("")}</div></div>
+      <div class="card"><div class="hd"><h3>工作流</h3><span class="api">GET …/workflows(定义只读,run 归 CLI)</span></div>
+        <div class="p0">${data.workflows.map(w=>`<div class="cap-line"><span class="cc" style="width:auto">${esc(w.name)}</span><span class="grow"></span>${Object.entries(w.status_counts).map(([k,v])=>v?`<span class="pill ${ST_PILL[k]||"p-gray"}" style="margin-left:5px"><i></i>${ST_LABEL[k]||k} ${v}</span>`:"").join("")}</div>`).join("")}</div>
+        <div class="bd" style="padding-top:0"><div class="note-cli"><span>ⓘ</span><span>长时驱动不在此页:终端 <code>os workflow run &lt;id&gt;</code>;队列消费两条路 — <code>os queue work</code> 手动排空,或 server 带 <code>--queue-work</code> 自驱(本控制台建的任务无需再手动认领)</span></div></div></div>
+      <div class="card"><div class="hd"><h3>最近决策</h3><span class="api">GET …/decisions</span></div><div class="p0 list">${dec}</div></div>
+      <div class="card"><div class="hd"><h3>记忆高亮</h3><span class="api">GET …/memories</span><div class="grow"></div><button class="btn sm" data-go="memories">知识库 →</button></div>
+        <div class="p0 list">${data.memories.slice(0,3).map(m=>`<div class="item"><div class="grow"><div class="t-title">${esc(m.title)}</div><div class="meta">${m.type} · ${ago(m.created_at)}</div></div><span class="tag">${m.tags.split(",")[0]}</span></div>`).join("")}</div></div>
+    </div>
+  </div>`;
+};
+views.approvals=()=>{
+  const f=state.apprFilter||"pending";
+  const list=data.approvals.filter(a=>f==="all"?true:a.status===f).sort((x,y)=>y.created_at-x.created_at);
+  const rows=list.map(a=>{
+    const task=data.tasks.find(t=>t.id===a.task_id);
+    return `<tr class="click" data-appr="${a.id}">
+      <td class="t-title">${esc(a.task_title)}${a.reason.includes("fuse")?` <span class="pill p-red" style="margin-left:6px"><i></i>熔断</span>`:""}</td>
+      <td>${riskPill(a.risk)}</td><td class="mono" style="font-size:11.5px;color:var(--text-2)">${esc(a.reason)}</td>
+      <td class="dim" style="font-size:12px">${esc(a.requested_by)}</td>
+      <td>${a.status==="pending"?stPill("waiting_approval"):`<span class="pill ${a.status==="approved"?"p-green":a.status==="rejected"?"p-red":"p-blue"}">${{approved:"已放行",rejected:"已驳回",changes:"要求修改"}[a.status]}</span>`}</td>
+      <td class="dim" style="font-size:12px">${fmtT(a.created_at)}</td>
+      <td style="text-align:right">${a.status==="pending"?`<button class="btn sm primary" data-decide="${a.id}">决策</button>`:`<span class="dim mono" style="font-size:11px">${esc(a.decided_by||"")}</span>`}</td></tr>`}).join("");
+  return `
+  <div class="page-head"><h1>待我审批</h1><span class="sub">人的决策中心 · POST /approvals/{id}/decision 与 CLI 同语义(approve 回队 / reject 打回,自动落 decision)</span></div>
+  <div class="row gap12" style="margin-bottom:14px">
+    <div class="seg">
+      <button class="${f==="pending"?"on":""}" data-af="pending">待决策 ${pendingApprovals().length}</button>
+      <button class="${f==="approved"?"on":""}" data-af="approved">已放行</button>
+      <button class="${f==="rejected"?"on":""}" data-af="rejected">已驳回</button>
+      <button class="${f==="all"?"on":""}" data-af="all">全部</button>
+    </div></div>
+  <div class="card"><div class="tblwrap"><table class="tb"><thead><tr>
+    <th>关联任务</th><th>风险</th><th>原因</th><th>请求方</th><th>状态</th><th>时间</th><th></th></tr></thead>
+    <tbody>${rows||`<tr><td colspan="7" class="empty">该分类暂无审批</td></tr>`}</tbody></table></div></div>`;
+};
+views.tasks=()=>{
+  const {q,status,risk,tool}=state.tf;
+  let list=data.tasks.slice().sort((a,b)=>b.updated_at-a.updated_at);
+  if(q)list=list.filter(t=>(t.title+t.description).toLowerCase().includes(q.toLowerCase()));
+  if(status)list=list.filter(t=>t.status===status);
+  if(risk)list=list.filter(t=>t.risk===risk);
+  if(tool)list=list.filter(t=>t.tool_name===tool);
+  const rows=list.map(t=>`<tr class="click" data-task="${t.id}">
+    <td class="idcell">${short(t.id)}</td>
+    <td><div class="t-title">${esc(t.title)}${t.parent_task_id?` <span class="pill p-gray" style="margin-left:6px">子任务</span>`:""}</div><div class="t-sub">${esc(t.description)}</div></td>
+    <td><span class="tag">${t.tool_name}</span></td><td>${stPill(t.status)}</td><td>${riskPill(t.risk)}</td>
+    <td class="num">${t.round_no||"—"}</td><td class="num" ${t.conflict_count>=3?'style="color:var(--crit);font-weight:700"':""}>${t.conflict_count||"—"}</td>
+    <td class="dim" style="font-size:12px">${ago(t.updated_at)}</td></tr>`).join("");
+  const chip=(g,v,label)=>`<button class="chip ${state.tf[g]===v?"on":""}" data-tf="${g}:${v||""}">${label}</button>`;
+  return `
+  <div class="page-head"><h1>任务中心</h1><span class="sub">GET /api/v1/tasks?company=&status=&risk=&attempt= · 新建工程请求 = 入队,执行由 CLI / 后台轮询认领</span>
+    <div class="acts"><button class="btn primary" data-newtask>+ 新建工程请求</button></div></div>
+  <div class="row gap12" style="margin-bottom:14px;flex-wrap:wrap">
+    <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="tq" placeholder="搜索标题 / 描述…" value="${esc(q||"")}" data-tf-input="q"></label>
+    <div class="chips">${["","pending","running","waiting_approval","completed","failed"].map(s=>chip("status",s,s?"⏺ "+ST_LABEL[s]:"全部状态")).join("")}</div>
+    <div class="chips">${["","low","medium","high"].map(s=>chip("risk",s,s?s+" 险":"全部风险")).join("")}</div>
+  </div>
+  <div class="card"><div class="tblwrap"><table class="tb"><thead><tr>
+    <th>ID</th><th>任务</th><th>工具</th><th>状态</th><th>风险</th><th class="num">回合</th><th class="num">冲突</th><th>更新</th></tr></thead>
+    <tbody>${rows||`<tr><td colspan="8" class="empty">无匹配 · 放宽筛选试试</td></tr>`}</tbody></table></div></div>`;
+};
+views.decisions=()=>{
+  const kinds=[...new Set(data.decisions.map(d=>d.kind))];
+  const f=state.dk||"";
+  const list=data.decisions.filter(d=>!f||d.kind===f);
+  return `
+  <div class="page-head"><h1>决策档案</h1><span class="sub">GET …/decisions?kind= · 审批决策自动落档(source=approval:&lt;id&gt;)</span>
+    <div class="acts"><button class="btn primary" data-newdec>+ 记一笔决策</button></div></div>
+  <div class="chips" style="margin-bottom:14px">${["",...kinds].map(k=>`<button class="chip ${f===k?"on":""}" data-dk="${k}">${k||"全部"}</button>`).join("")}</div>
+  <div class="card"><div class="p0 list">${list.map(d=>`
+    <div class="item"><div class="grow"><div class="t-title"><span class="tag" style="margin-right:8px">${d.kind}</span>${esc(d.title)}${d.status==="superseded"?' <span class="pill p-gray" style="margin-left:6px">已被取代</span>':""}</div>
+    <div class="meta">${esc(d.body)} · ${esc(d.decided_by)} · ${esc(d.source)} · ${fmtT(d.created_at)}</div></div></div>`).join("")}</div></div>`;
+};
+views.memories=()=>{
+  const {q,type}=state.mf;
+  let list=data.memories;
+  if(type)list=list.filter(m=>m.type===type);
+  if(q)list=list.filter(m=>(m.title+m.content+m.tags).toLowerCase().includes(q.toLowerCase()));
+  const cards=list.map(m=>{
+    let body=esc(m.content);if(q){const re=new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")})`,"gi");body=body.replace(re,'<span class="hl">$1</span>')}
+    return `<div class="mem"><div class="row gap8"><span class="pill ${m.type==="lesson"?"p-amber":m.type==="insight"?"p-blue":m.type==="playbook"?"p-green":"p-gray"}">${m.type}</span>
+      <b class="grow" style="min-width:0">${esc(m.title)}</b></div>
+      <p>${body}</p><div class="mfoot">${m.tags.split(",").map(t=>`<span class="tag">${esc(t.trim())}</span>`).join("")}
+      <span class="grow"></span><span class="dim" style="font-size:11.5px">${esc(m.source)} · ${fmtT(m.created_at)}</span></div></div>`}).join("");
+  return `
+  <div class="page-head"><h1>知识库</h1><span class="sub">GET …/memories/search?q=(FTS,trigram ≥3 字)· POST …/memories 沉淀</span>
+    <div class="acts"><button class="btn primary" data-newmem>+ 沉淀一条</button></div></div>
+  <div class="row gap12" style="margin-bottom:14px;flex-wrap:wrap">
+    <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="mq" placeholder="全文检索(≥3 字命中更准)…" value="${esc(q||"")}" data-mf-input="q"></label>
+    <div class="chips">${["",...new Set(data.memories.map(m=>m.type))].map(t=>`<button class="chip ${type===t?"on":""}" data-mt="${t}">${t||"全部类型"}</button>`).join("")}</div>
+  </div>
+  <div class="mem-grid">${cards||`<div class="card"><div class="empty">无命中 · 换个关键词(2 字词会自动回退 LIKE)</div></div>`}</div>`;
+};
+views.audit=()=>{
+  const f=state.ae||"";
+  const list=data.audits.filter(a=>!f||a.entity_type===f).sort((x,y)=>y.created_at-x.created_at);
+  return `
+  <div class="page-head"><h1>审计流水</h1><span class="sub">GET /api/v1/audit?entity= · 全系统事件流</span></div>
+  <div class="chips" style="margin-bottom:14px">${["",...new Set(data.audits.map(a=>a.entity_type))].map(e=>`<button class="chip ${f===e?"on":""}" data-ae="${e}">${e||"全部实体"}</button>`).join("")}</div>
+  <div class="card"><div class="tblwrap"><table class="tb"><thead><tr><th>时间</th><th>实体</th><th>动作</th><th>Actor</th><th>详情</th></tr></thead>
+    <tbody>${list.map(a=>`<tr><td class="dim mono" style="font-size:11.5px;white-space:nowrap">${fmtT(a.created_at)}</td>
+      <td><span class="tag">${a.entity_type}</span> <span class="idcell">${short(a.entity_id)}</span></td>
+      <td><span class="pill ${a.action.includes("reject")||a.action.includes("fail")?"p-red":a.action.includes("approve")||a.action.includes("succeed")?"p-green":"p-gray"}">${a.action}</span></td>
+      <td class="mono" style="font-size:11.5px">${esc(a.actor)}</td><td class="muted">${esc(a.detail)}</td></tr>`).join("")}</tbody></table></div></div>`;
+};
+views.endpoints=()=>{
+  const rows=data.endpoints.map(e=>`
+    <tr class="click" data-ep="${e.id}"><td class="t-title">${esc(e.name)}</td>
+    <td><span class="tag">${e.proto}</span></td><td class="dim" style="font-size:12px">${e.vendor}</td>
+    <td class="mono" style="font-size:11.5px;color:var(--text-2);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.base_url)}</td>
+    <td>${e.selected_model?`<span class="pill p-blue">${e.selected_model}</span>`:'<span class="pill p-gray">未选模型</span>'}</td>
+    <td>${e.role?`<span class="tag">${({planner:"规划 planner",pool:"通用池 pool",standby:"热备 standby"})[e.role]||e.role}</span>`:'<span class="dim">—</span>'}</td>
+    <td><span class="pill ${e.status==="active"?"p-green":"p-gray"}"><i></i>${e.status==="active"?"启用":"停用"}</span></td>
+    <td style="text-align:right;white-space:nowrap">
+      <button class="btn sm" data-models="${e.id}" id="mb-${e.id}">拉取模型</button>
+      <button class="btn sm ${e.selected_model?"":"primary"}" data-select="${e.id}">选择模型</button></td></tr>`).join("");
+  return `
+  <div class="page-head"><h1>模型端点池</h1><span class="sub">POST /endpoints · /{id}/select · /{id}/models · token 仅密文落库(enc:v1:),响应无明文</span>
+    <div class="acts"><button class="btn primary" data-newep>+ 新增端点</button></div></div>
+  <div class="card"><div class="tblwrap"><table class="tb"><thead><tr>
+    <th>名称</th><th>协议</th><th>厂商</th><th>Base URL</th><th>选定模型</th><th>角色</th><th>状态</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>
+  <div class="card" style="margin-top:16px"><div class="hd"><h3>端点分界</h3><span class="api">OS_ENGINE_MODE</span></div>
+    <div class="bd"><div class="note-cli"><span>ⓘ</span><span>live 模式:工程任务写/测/审全部走端点池;scripted 模式(冒烟/CI):全模型走固定脚本,不发外网。熔断/审批语义两模式一致。</span></div></div></div>`;
+};
+views.repos=()=>{
+  const rd=data.overview.rd, L=rd.ledger;
+  const rows=data.repos.map(r=>`
+    <tr class="click" data-repo="${r.id}"><td class="t-title">${esc(r.name)}<div class="t-sub mono">${esc(r.repo_url)}</div></td>
+    <td class="mono" style="font-size:11.5px">${esc(r.workspace_path)}</td>
+    <td class="num">${r.issues_open}</td><td class="dim" style="font-size:12px">${ago(r.last_sync)}</td>
+    <td style="text-align:right"><span class="tag">webhook + 轮询兜底</span></td></tr>`).join("");
+  return `
+  <div class="page-head"><h1>研发仓库 · 通道 B</h1><span class="sub">POST /intake/sync 与 /api/webhook/github 共写 issue_sync 账本(UNIQUE 去重)</span>
+    <div class="acts"><button class="btn" data-act="sync" id="btn-sync"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg> 立即同步</button></div></div>
+  <div class="card"><div class="hd"><h3>已登记仓库</h3><span class="api">GET /companies/{id}/repos</span></div>
+    <div class="tblwrap"><table class="tb"><thead><tr><th>仓库</th><th>Workspace</th><th class="num">Open issues</th><th>最近同步</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="bd" style="border-top:1px solid var(--line)"><button class="btn sm" data-newrepo>+ 登记仓库</button></div></div>
+  <div class="card"><div class="hd"><h3>issue 处置账本(累计 ${rd.ledger_seen})</h3><span class="api">IntakeResult.by_disp</span></div>
+    <div class="bd">${[["direct_work","直接做 → engineering 任务","#1a9e65"],["merge","合并批次(planner)","#2f54eb"],["skip","跳过","#8d99aa"],["ask_human","问人 → 审批","#c9861a"]].map(([k,z,c])=>`
+      <div class="prog"><span class="pl"><span>${z}</span><b>${L[k]}</b></span><span class="bar minibar"><div style="width:${L[k]/rd.ledger_seen*100}%;background:${c}"></div></span></div>`).join("")}
+      <div class="dim" style="font-size:11.5px;margin-top:8px">OS_GITHUB_TOKEN 未配时 live 拉取 fail-closed;fixture 模式用于冒烟</div></div></div>`;
+};
+/* ================= 渲染 & 路由 ================= */
+const state={view:"overview",apprFilter:"pending",tf:{q:"",status:"",risk:"",tool:""},dk:"",mf:{q:"",type:""},ae:""};
+function render(){
+  $("#view").innerHTML=views[state.view]();
+  $$("#nav a").forEach(a=>a.classList.toggle("on",a.dataset.v===state.view));
+  updNav();mountSpark();
+  $("#foot-time").textContent="last sync "+fmtT(now);
+}
+function go(v){state.view=v;render();window.scrollTo(0,0)}
+function mountSpark(){
+  const host=$("#spark");if(!host)return;
+  const d=data.overview.done_7d,W=70,H=22,mx=Math.max(...d);
+  const pts=d.map((v,i)=>[i/(d.length-1)*W,H-v/mx*(H-3)-1]);
+  const line=pts.map(p=>p.join(",")).join(" ");
+  host.innerHTML=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">
+    <polyline points="0,${H} ${line} ${W},${H}" fill="var(--accent-soft)" stroke="none"/>
+    <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linejoin="round"/>
+    <circle cx="${pts.at(-1)[0]}" cy="${pts.at(-1)[1]}" r="2.2" fill="var(--accent)"/></svg>`;
+}
+/* ================= 抽屉 & 弹窗 ================= */
+function openDrawer(title,html,foot){$("#dr-title").textContent=title;$("#dr-body").innerHTML=html;$("#dr-foot").innerHTML=foot||"";$("#dr-foot").style.display=foot?"flex":"none";$("#drawer").classList.add("open");$("#veil").classList.add("open")}
+function openModal(title,html,foot){$("#md-title").textContent=title;$("#md-body").innerHTML=html;$("#md-foot").innerHTML=foot||"";$("#modal").classList.add("open");const fi=$("#md-body").querySelector("input:not([type=radio]),textarea,select");fi&&fi.focus()}
+function closeAll(){$("#drawer").classList.remove("open");$("#modal").classList.remove("open");$("#veil").classList.remove("open")}
+$("#veil").addEventListener("click",closeAll);
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeAll()});
+document.addEventListener("click",e=>{if(e.target.closest("[data-close]"))closeAll()});
+/* ================= 任务详情 ================= */
+function taskDrawer(id){
+  const t=data.tasks.find(x=>x.id===id);if(!t)return;
+  const execs=data.executions[id]||[];
+  const kv=[["ID",`<span class="mono">${t.id}</span>`],["工具",`<span class="tag">${t.tool_name}</span>`],["状态",stPill(t.status)],["队列",`<span class="mono" style="font-size:12px">${t.q_status}</span>`],
+    ["风险",riskPill(t.risk)],["回合 / 冲突",`<span class="mono">${t.round_no} / <b style="color:${t.conflict_count>=3?"var(--crit)":"inherit"}">${t.conflict_count}</b></span>`],
+    ["Capability",t.capability_id?data.capabilities.find(c=>c.id===t.capability_id).name:"—"],["父任务",t.parent_task_id?`<a href="#" data-task="${t.parent_task_id}" style="color:var(--accent)">↩ ${t.parent_task_id}</a>`:"—"],
+    ["创建 / 更新",`<span class="mono" style="font-size:12px">${fmtT(t.created_at)} / ${fmtT(t.updated_at)}</span>`]];
+  if(t.last_error)kv.push(["最后错误",`<span class="mono" style="color:var(--crit);font-size:12px">${esc(t.last_error)}</span>`]);
+  if(t.result)kv.push(["结果",esc(t.result)]);
+  const tl=execs.length?`<div class="sect-h">执行回合</div><div class="timeline">${execs.map(x=>`
+    <div class="tl-i ${x.status==="failed"?"bad":x.status==="succeeded"?"ok":""}">
+      <div class="tt">第 ${x.attempt} 次 · <span class="pill ${x.status==="failed"?"p-red":"p-green"}" style="font-size:10px">${x.status}</span> <span class="tag">${x.worker}</span></div>
+      <div class="tm">${fmtT(x.started_at)} → ${fmtT(x.finished_at)} · ${Math.round((x.finished_at-x.started_at)/MIN)}min</div>
+      ${x.result?`<div class="muted" style="font-size:12.5px;margin-top:3px">${esc(x.result)}</div>`:""}
+      ${x.error?`<div class="terr">✗ ${esc(x.error)}</div>`:""}</div>`).join("")}</div>`
+    :`<div class="sect-h">执行回合</div><div class="dim" style="font-size:12.5px">暂无执行记录(GET /tasks/${t.id}/executions)</div>`;
+  const ap=data.approvals.find(a=>a.task_id===t.id&&a.status==="pending");
+  openDrawer(t.title,`
+    <div class="muted" style="font-size:13px;margin-bottom:14px">${esc(t.description)}</div>
+    <dl class="kv">${kv.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>${tl}
+    <div class="note-cli" style="margin-top:14px"><span>ⓘ</span><span>API 不暴露执行(长时阻塞,契约 §五 ❌):<code>os task run ${t.id}</code> 单跑,队列由 <code>os queue work</code> 或 server <code>--queue-work</code> 认领</span></div>`,
+    ap?`<button class="btn primary grow" style="justify-content:center" data-decide="${ap.id}">处理该任务的审批(${short(ap.id)}) →</button>`:"");
+}
+/* ================= 审批决策 ================= */
+function apprDrawer(id){
+  const a=data.approvals.find(x=>x.id===id);if(!a)return;
+  const stP=a.status==="pending"?stPill("waiting_approval"):`<span class="pill ${a.status==="approved"?"p-green":a.status==="rejected"?"p-red":"p-blue"}">${{approved:"已放行",rejected:"已驳回",changes:"要求修改"}[a.status]}</span>`;
+  openDrawer(a.task_title,`<dl class="kv">
+    <dt>审批 ID</dt><dd class="mono" style="font-size:12px">${a.id}</dd>
+    <dt>关联任务</dt><dd><a href="#" data-task="${a.task_id}" style="color:var(--accent)">↩ ${esc(a.task_title)}</a></dd>
+    <dt>风险</dt><dd>${riskPill(a.risk)}</dd>
+    <dt>原因</dt><dd class="mono" style="font-size:12px">${esc(a.reason)}</dd>
+    <dt>请求方</dt><dd class="mono" style="font-size:12px">${esc(a.requested_by)}</dd>
+    <dt>状态</dt><dd>${stP}</dd>
+    <dt>请求时间</dt><dd class="mono" style="font-size:12px">${fmtT(a.created_at)}</dd>
+    ${a.decided_at?`<dt>决定</dt><dd class="mono" style="font-size:12px">${esc(a.decided_by)} · ${fmtT(a.decided_at)}</dd><dt>备注</dt><dd>${esc(a.decision_note||"—")}</dd>`:""}</dl>
+    ${a.status!=="pending"?'<div class="note-cli" style="margin-top:10px"><span>ⓘ</span><span>审批为终态记录:重复决策会被 service 拒绝("approval already '+a.status+'")</span></div>':""}`,
+    a.status==="pending"?`<button class="btn primary grow" style="justify-content:center" data-decide="${a.id}">决策 →</button>`:"");
+}
+let deciding=null;
+function decideModal(id){
+  const a=data.approvals.find(x=>x.id===id);if(!a)return;deciding=id;
+  openModal("审批决策 · "+a.task_title,`
+    <div class="muted" style="font-size:13px">原因:<span class="mono">${esc(a.reason)}</span> · ${riskPill(a.risk)}</div>
+    <div class="f"><label>决策</label>
+      <div class="dec-seg" id="dseg">
+        <label data-d="approve" class="sel-a"><input type="radio" name="d" value="approve" checked>放行<small>任务回队续跑</small></label>
+        <label data-d="reject"><input type="radio" name="d" value="reject">驳回<small>任务置 failed</small></label>
+        <label data-d="changes"><input type="radio" name="d" value="changes">要修改<small>任务置 failed · 重开建单</small></label>
+      </div></div>
+    <div class="f"><label for="dnote">备注(随 decision 自动落档)</label><input type="text" id="dnote" placeholder="例:影响可控,先放行"></div>
+    <div class="note-cli"><span>ⓘ</span><span>等价 <code>os approval approve|reject|changes ${short(a.id)}</code> → POST /api/v1/approvals/${a.id}/decision(approve→回队续跑;reject / changes→任务置 failed,与 service 同语义)</span></div>`,
+    `<button class="btn" data-close>取消</button><button class="btn primary" id="dgo">提交决策</button>`);
+  $$("#dseg label").forEach(l=>l.addEventListener("click",()=>{
+    $$("#dseg label").forEach(x=>x.classList.remove("sel-a","sel-r","sel-c"));
+    l.classList.add({approve:"sel-a",reject:"sel-r",changes:"sel-c"}[l.dataset.d])}));
+}
+document.addEventListener("click",e=>{
+  if(e.target.id==="dgo"){
+    const d=$("#dseg input:checked").value, note=$("#dnote").value.trim();
+    const a=data.approvals.find(x=>x.id===deciding);if(!a)return;
+    if(a.status!=="pending"){toast(`该审批已处理(${a.status}),不可重复决策`,"err","service: approval already "+a.status);return}
+    a.status=d==="approve"?"approved":d==="changes"?"changes":"rejected";
+    a.decided_at=now;a.decided_by="human:console";a.decision_note=note||null;
+    const t=data.tasks.find(x=>x.id===a.task_id);
+    const rd=data.overview.rd;
+    if(t&&t.status==="waiting_approval"&&rd){rd.by_status.waiting_approval=Math.max(0,(rd.by_status.waiting_approval||1)-1)}
+    if(d==="approve"&&t){t.status="pending";t.q_status="ready";t.conflict_count=0;t.round_no=(t.round_no||0)+1;if(rd)rd.by_status.pending=(rd.by_status.pending||0)+1}
+    if((d==="reject"||d==="changes")&&t){t.status="failed";t.q_status="dead";t.last_error=d==="reject"?"rejected by human":"changes requested: "+note;if(rd)rd.by_status.failed=(rd.by_status.failed||0)+1}
+    if(rd){rd.fused=rd.fused.filter(f=>f.id!==a.task_id);rd.waiting=rd.waiting.filter(f=>f.id!==a.task_id)}
+    data.decisions.unshift({id:"d"+(data.decisions.length+1),kind:"approval",title:"审批 "+a.status+": "+a.task_title,status:"made",source:"approval:"+a.id,decided_by:"human:console",body:note||"",created_at:now});
+    data.audits.unshift({id:"g"+(data.audits.length+1),entity_type:"approval",entity_id:a.id,action:d,actor:"human:console",detail:note||a.reason,created_at:now});
+    closeAll();render();
+    const msg=d==="approve"?`已放行:${a.task_title} → 任务回队续跑`:d==="reject"?`已驳回:${a.task_title} → 任务置 failed`:`已打回:${a.task_title} → 任务置 failed(重开请再建单)`;
+    toast(msg,"ok","decision(kind=approval) 已自动落档 · source=approval:"+a.id);
+  }
+});
+/* ================= 表单模态:新建任务 / 决策 / 记忆 / 端点 / 仓库 ================= */
+function newTaskModal(){openModal("新建工程请求",`
+  <div class="f"><label>标题 *</label><input type="text" id="nt-title" placeholder="例:支持导出 PDF"></div>
+  <div class="f"><label>描述</label><textarea id="nt-desc" placeholder="写清楚背景 / 验收标准。engineering 工具会由 planner 拆解、driver 回合执行"></textarea></div>
+  <div class="row gap8">
+    <div class="f grow"><label>工具</label><select id="nt-tool"><option value="engineering">engineering(研发部)</option><option value="file-write">file-write</option><option value="shell">shell</option><option value="git">git</option><option value="aifix">aifix</option></select></div>
+    <div class="f grow"><label>风险</label><select id="nt-risk"><option>low</option><option selected>medium</option><option>high(将卡审批门)</option></select></div>
+    <div class="f grow"><label>Capability</label><select id="nt-cap"><option value="">—</option>${data.capabilities.map(c=>`<option value="${c.id}">${c.name}</option>`).join("")}</select></div></div>
+  <div class="note-cli"><span>ⓘ</span><span>POST /api/v1/tasks → 入队(pending/ready),actor 记 <code>human:console</code>;执行认领两条路:<code>os queue work</code> 或 server <code>--queue-work</code> 自动消费(审计 <code>runtime:server</code>)</span></div>`,
+  `<button class="btn" data-close>取消</button><button class="btn primary" id="ntgo">创建并入队</button>`)}
+document.addEventListener("click",e=>{
+  if(e.target.id==="ntgo"){
+    const title=$("#nt-title").value.trim();
+    if(!title){toast("缺必填:company_id / title","","400 bad_request");return}
+    const risk=$("#nt-risk").value.includes("high")?"high":$("#nt-risk").value;
+    const t={id:"t"+(data.tasks.length+1),title,description:$("#nt-desc").value.trim(),tool_name:$("#nt-tool").value,risk,
+      status:risk==="high"?"waiting_approval":"pending",q_status:risk==="high"?"waiting_approval":"ready",round_no:0,conflict_count:0,
+      capability_id:$("#nt-cap").value||null,workflow_id:null,created_at:now,updated_at:now};
+    data.tasks.unshift(t);
+    if(risk==="high"){data.approvals.unshift({id:"a"+(data.approvals.length+1),task_id:t.id,task_title:title,risk:"high",reason:"risk=high",status:"pending",requested_by:"system",created_at:now,decided_at:null});data.overview.rd.waiting.push({id:t.id,title,status:"waiting_approval",risk:"high",round:1,conflict:0,reason:"risk=high 审批门"});data.overview.rd.by_status.waiting_approval=(data.overview.rd.by_status.waiting_approval||0)+1}
+    else data.overview.rd.by_status.pending++;
+    data.overview.rd.total++;
+    data.audits.unshift({id:"g"+(data.audits.length+1),entity_type:"task",entity_id:t.id,action:"create",actor:"human:console",detail:title,created_at:now});
+    closeAll();go(risk==="high"?"approvals":"tasks");render();
+    toast(risk==="high"?"已建单:risk=high → 先过审批门":"已建单入队:等待认领","ok","201 · "+t.id);
+  }
+  if(e.target.dataset.newdec!==undefined||e.target.closest("[data-newdec]")){
+    openModal("记一笔决策",`
+      <div class="f"><label>类别</label><select id="nd-kind">${["strategy","approval","engineering","pricing","hiring"].map(k=>`<option>${k}</option>`).join("")}</select></div>
+      <div class="f"><label>标题 *</label><input type="text" id="nd-title"></div>
+      <div class="f"><label>正文</label><textarea id="nd-body" placeholder="背景 / 备选 / 决定 / 复盘时间"></textarea></div>`,
+      `<button class="btn" data-close>取消</button><button class="btn primary" id="ndgo">落档</button>`);
+  }
+  if(e.target.id==="ndgo"){
+    const title=$("#nd-title").value.trim();if(!title){toast("缺必填:title","","400 bad_request");return}
+    data.decisions.unshift({id:"d"+(data.decisions.length+1),kind:$("#nd-kind").value,title,status:"made",source:"manual",decided_by:"human:console",body:$("#nd-body").value.trim(),created_at:now});
+    data.audits.unshift({id:"g"+(data.audits.length+1),entity_type:"decision",entity_id:"d"+data.decisions.length,action:"create",actor:"human:console",detail:title,created_at:now});
+    closeAll();go("decisions");render();toast("决策已落档","ok","201");
+  }
+  if(e.target.closest("[data-newmem]")){
+    openModal("沉淀一条记忆",`
+      <div class="f"><label>类型</label><select id="nm-type"><option>lesson</option><option>insight</option><option>playbook</option><option>fact</option></select></div>
+      <div class="f"><label>标题 *</label><input type="text" id="nm-title"></div>
+      <div class="f"><label>内容</label><textarea id="nm-content"></textarea></div>
+      <div class="f"><label>标签(逗号分隔)</label><input type="text" id="nm-tags" placeholder="例:熔断,评审"></div>`,
+      `<button class="btn" data-close>取消</button><button class="btn primary" id="nmgo">沉淀</button>`);
+  }
+  if(e.target.id==="nmgo"){
+    const title=$("#nm-title").value.trim();if(!title){toast("缺必填:company_id / title","","400 bad_request");return}
+    data.memories.unshift({id:"m"+(data.memories.length+1),type:$("#nm-type").value,title,content:$("#nm-content").value.trim()||"—",source:"console",tags:$("#nm-tags").value.trim()||"未分类",created_at:now});
+    data.audits.unshift({id:"g"+(data.audits.length+1),entity_type:"memory",entity_id:"m"+data.memories.length,action:"create",actor:"human:console",detail:title,created_at:now});
+    closeAll();go("memories");render();toast("已沉淀进知识库","ok","201");
+  }
+  if(e.target.closest("[data-newep]")){
+    openModal("新增模型端点",`
+      <div class="f"><label>名称 *</label><input type="text" id="ne-name" placeholder="例:claude-backup"></div>
+      <div class="f"><label>协议</label><select id="ne-proto"><option>auto(域名自动识别厂商)</option><option>anthropic</option><option>openai</option></select>
+        <div class="hint">proto 取值 auto|anthropic|openai;auto 时按 Base URL 识别 vendor(anthropic.com / openai.com)</div></div>
+      <div class="f"><label>Base URL *</label><input type="text" id="ne-url" placeholder="https://…"></div>
+      <div class="f"><label>Token</label><input type="password" id="ne-token" placeholder="AES-GCM 密文落库(enc:v1:),响应永不回明文">
+        <div class="hint">留空 = 更新端点不换 token;OS_ENDPOINT_KEY 负责加解密,fail-closed</div></div>`,
+      `<button class="btn" data-close>取消</button><button class="btn primary" id="nego">保存</button>`);
+  }
+  if(e.target.id==="nego"){
+    const name=$("#ne-name").value.trim(),url=$("#ne-url").value.trim();
+    if(!name||!url){toast("缺必填:name / base_url","","400 bad_request");return}
+    const v=/anthropic\.com/i.test(url)?"anthropic":/openai\.com/i.test(url)?"openai":"—";
+    data.endpoints.push({id:"ep"+(data.endpoints.length+1),name,proto:$("#ne-proto").value.split("(")[0],vendor:v,base_url:url,selected_model:"",role:"pool",status:"active",has_token:!!$("#ne-token").value,models_cache:[]});
+    closeAll();go("endpoints");render();toast("端点已保存(role=pool,active):拉一次模型即可选定","ok","201");
+  }
+  if(e.target.closest("[data-newrepo]")){
+    openModal("登记仓库(通道 B)",`
+      <div class="f"><label>名称 *</label><input type="text" id="nr-name"></div>
+      <div class="f"><label>Repo URL *</label><input type="text" id="nr-url" placeholder="https://github.com/acme/app"></div>
+      <div class="f"><label>Workspace</label><input type="text" id="nr-ws" placeholder="/srv/ws/app"></div>
+      <div class="note-cli"><span>ⓘ</span><span>登记后 webhook(公网可达)与轮询都会 intake;GitHub 侧 secret 在 webhook 校验,与 OS_API_TOKEN 无关</span></div>`,
+      `<button class="btn" data-close>取消</button><button class="btn primary" id="nrgo">登记</button>`);
+  }
+  if(e.target.id==="nrgo"){
+    const name=$("#nr-name").value.trim(),url=$("#nr-url").value.trim();
+    if(!name||!url){toast("缺必填:name / repo_url","","400 bad_request");return}
+    data.repos.push({id:"r"+(data.repos.length+1),name,repo_url:url,workspace_path:$("#nr-ws").value.trim()||"(临时工作区)",last_sync:now,issues_open:0});
+    closeAll();go("repos");render();toast("仓库已登记:点「立即同步」拉首批 issue","ok","201");
+  }
+});
+/* ================= 全局事件路由 ================= */
+document.addEventListener("click",e=>{
+  const nav=e.target.closest("#nav a[data-v]");if(nav){go(nav.dataset.v);return}
+  const d=e.target.closest("[data-decide]");if(d){decideModal(d.dataset.decide);return}
+  const goEl=e.target.closest("[data-go]");if(goEl){go(goEl.dataset.go);return}
+  const td=e.target.closest("[data-task]");if(td){taskDrawer(td.dataset.task);return}
+  const af=e.target.closest("[data-af]");if(af){state.apprFilter=af.dataset.af;render();return}
+  const tf=e.target.closest("[data-tf]");if(tf){const [k,v]=tf.dataset.tf.split(":");state.tf[k]=v;render();return}
+  const dk=e.target.closest("[data-dk]");if(dk){state.dk=dk.dataset.dk;render();return}
+  const mt=e.target.closest("[data-mt]");if(mt){state.mf.type=mt.dataset.mt;render();return}
+  const ae=e.target.closest("[data-ae]");if(ae){state.ae=ae.dataset.ae;render();return}
+  const nw=e.target.closest("[data-newtask]");if(nw){newTaskModal();return}
+  const ms=e.target.closest("[data-models]");if(ms){
+    const b=$("#mb-"+ms.dataset.models);b.disabled=true;b.innerHTML='<span class="spin"></span> 拉取中';
+    setTimeout(()=>{const ep=data.endpoints.find(x=>x.id===ms.dataset.models);
+      b.disabled=false;b.textContent="拉取模型";
+      ep.models_cache=ep.models_cache.length?ep.models_cache:["(示例)m-1","m-2","m-3"];ep.status="active";
+      toast(`${ep.name}:拉到 ${ep.models_cache.length} 个可用模型`,"ok","POST /endpoints/"+ep.id+"/models");render()},900);return}
+  const sel=e.target.closest("[data-select]");if(sel){
+    const ep=data.endpoints.find(x=>x.id===sel.dataset.select);if(!ep)return;
+    openModal("选择模型 · "+ep.name,`
+      <div class="f"><label>模型 *</label><input type="text" id="sm-model" value="${esc(ep.selected_model||"")}" placeholder="例:claude-opus-5">
+        ${ep.models_cache.length?`<div class="hint">已缓存:<span style="white-space:normal">${ep.models_cache.map(x=>`<button class="chip" data-mm="${esc(x)}">${esc(x)}</button>`).join(" ")}</span></div>`:'<div class="hint">尚无缓存 → 建议先「拉取模型」;select 不校验模型名,直填亦可</div>'}</div>
+      <div class="f"><label>角色(可选,role 取值 pool|planner|standby)</label><select id="sm-role">
+        <option value="">不改</option>
+        <option value="pool"${ep.role==="pool"?" selected":""}>pool · 通用池</option>
+        <option value="planner"${ep.role==="planner"?" selected":""}>planner · 规划(planner 拆解用)</option>
+        <option value="standby"${ep.role==="standby"?" selected":""}>standby · 热备</option></select></div>`,
+      `<button class="btn" data-close>取消</button><button class="btn primary" id="smgo" data-ep="${ep.id}">选定</button>`);
+    return}
+  const mm=e.target.closest("[data-mm]");if(mm){$("#sm-model").value=mm.dataset.mm;return}
+  if(e.target.id==="smgo"){
+    const ep=data.endpoints.find(x=>x.id===e.target.dataset.ep);if(!ep)return;
+    const model=$("#sm-model").value.trim();
+    if(!model){toast("缺必填:model(选择模型不可空)","","400 bad_request");return}
+    const role=$("#sm-role").value;
+    ep.selected_model=model;if(role)ep.role=role;ep.status="active";
+    data.audits.unshift({id:"g"+(data.audits.length+1),entity_type:"endpoint",entity_id:ep.id,action:"select",actor:"human:console",detail:model+" role="+(role||ep.role),created_at:now});
+    closeAll();render();
+    toast(`${ep.name} → ${model}${role?"("+role+")":""}`,"ok","POST /endpoints/"+ep.id+"/select");return}
+  const ad=e.target.closest("[data-appr]");if(ad){const ap=data.approvals.find(x=>x.id===ad.dataset.appr);if(ap&&ap.status==="pending")decideModal(ap.id);else apprDrawer(ad.dataset.appr);return}
+  const rep=e.target.closest("[data-repo]");if(rep){const r=data.repos.find(x=>x.id===rep.dataset.repo);
+    openDrawer(r.name,`<dl class="kv"><dt>Repo URL</dt><dd class="mono" style="font-size:12px">${esc(r.repo_url)}</dd>
+      <dt>Workspace</dt><dd class="mono" style="font-size:12px">${esc(r.workspace_path)}</dd>
+      <dt>Open issues</dt><dd class="mono">${r.issues_open}</dd><dt>最近同步</dt><dd>${fmtT(r.last_sync)}</dd>
+      <dt>Webhook</dt><dd class="mono" style="font-size:11.5px">POST /api/webhook/github(events: issues.opened/reopened/edited)</dd></dl>
+      <div class="note-cli" style="margin-top:10px"><span>ⓘ</span><span>分诊口径(直接做/合并/跳过/问人)由 triage agent 判定,账本落 <code>issue_sync</code>;改口径去知识库 playbook</span></div>`,"");return}
+  const sy=e.target.closest('[data-act="sync"]');if(sy){
+    const btn=$("#btn-sync")||sy;const html=btn.innerHTML;btn.disabled=true;btn.innerHTML='<span class="spin"></span> 同步中';
+    setTimeout(()=>{const L=data.overview.rd.ledger;L.direct_work++;data.overview.rd.ledger_seen++;
+      if(btn.isConnected){btn.disabled=false;btn.innerHTML=html}
+      toast("通道 B 同步完成:+1 issue → direct_work 建任务入队","ok","POST /intake/sync · issues_seen=1, created_tasks=1");render()},1100);return}
+});
+/* 搜索输入(不重渲染以保焦点) */
+document.addEventListener("input",e=>{
+  if(e.target.dataset.tfInput==="q"){state.tf.q=e.target.value;
+    // 只重刷表格(保输入焦点)
+    const tbl=$("#view").querySelector("table.tb tbody");if(!tbl)return;
+    const tmp=document.createElement("div");tmp.innerHTML=views.tasks();
+    const nt=tmp.querySelector("table.tb tbody");tbl.innerHTML=nt.innerHTML;return}
+  if(e.target.dataset.mfInput==="q"){state.mf.q=e.target.value;
+    const grid=$("#view .mem-grid");const tmp=document.createElement("div");tmp.innerHTML=views.memories();
+    grid.innerHTML=tmp.querySelector(".mem-grid").innerHTML;return}
+});
+/* ================= 主题 & 刷新 ================= */
+function setTheme(t){document.documentElement.dataset.theme=t;try{localStorage.setItem("os72-theme",t)}catch(e){}}
+try{const st=localStorage.getItem("os72-theme");if(st)setTheme(st)}catch(e){}
+$("#btn-theme").addEventListener("click",()=>{
+  const cur=document.documentElement.dataset.theme||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");
+  setTheme(cur==="dark"?"light":"dark");toast(cur==="dark"?"已切到浅色":"已切到深色")});
+$("#btn-refresh").addEventListener("click",()=>{render();toast("数据已刷新","ok","GET /api/v1/companies/c01/overview · 200 · application/json")});
+$("#comp-sel").addEventListener("change",e=>{toast(e.target.selectedIndex===0?"已切回 ACME Labs":"示例原型仅含一家公司的数据")});
+/* ================= boot ================= */
+render();
+</script>
+</body>
+</html>

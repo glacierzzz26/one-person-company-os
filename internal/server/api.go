@@ -15,6 +15,9 @@ import (
 // 全部 handler 是 service 方法的 thin wrapper:信封 {ok,data} / 错误 {ok:false,error:{code,message}},
 // 404 = sql.ErrNoRows,字段 snake_case = 域结构体 json tag,时间 unix 秒,ID 完整 UUID。
 
+// consoleActor 是 /api/v1 全部写操作的审计 actor(与 CLI 的 human:cli、intake 的 intake:* 区分来源)。
+const consoleActor = "human:console"
+
 // ---- 信封 / 通用 ----
 
 func apiOK(w http.ResponseWriter, v any) {
@@ -126,7 +129,7 @@ func (s *Server) apiCreateCompany(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, http.StatusBadRequest, "bad_request", "name is required")
 		return
 	}
-	c, err := s.svc.CreateCompany(r.Context(), req.Name, req.Vision)
+	c, err := s.svc.CreateCompanyAs(r.Context(), req.Name, req.Vision, consoleActor)
 	if err != nil {
 		handleServiceErr(w, err)
 		return
@@ -239,13 +242,13 @@ func (s *Server) apiCreateTask(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, http.StatusBadRequest, "bad_request", "company_id and title are required")
 		return
 	}
-	t, err := s.svc.CreateTask(r.Context(), service.TaskParams{
+	t, err := s.svc.CreateTaskAs(r.Context(), service.TaskParams{
 		CompanyID: req.CompanyID, CapabilityID: strPtr(req.CapabilityID), WorkflowID: strPtr(req.WorkflowID),
 		AgentID: strPtr(req.AgentID), Title: req.Title, Description: req.Description,
 		ToolName: req.ToolName, Risk: req.Risk, MaxAttempts: req.MaxAttempts, TimeoutSec: req.TimeoutSec,
 		Workspace: req.Workspace, ParentTaskID: strPtr(req.ParentTaskID),
 		WriterEndpointID: strPtr(req.WriterEndpointID), ReviewerEndpointID: strPtr(req.ReviewerEndpointID),
-	})
+	}, consoleActor)
 	if err != nil {
 		handleServiceErr(w, err)
 		return
@@ -287,7 +290,7 @@ func (s *Server) apiDecideApproval(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, http.StatusBadRequest, "bad_request", "decision must be approve|reject|changes")
 		return
 	}
-	a, err := s.svc.DecideApproval(r.Context(), pathParam(r, "id"), req.Decision, req.Note)
+	a, err := s.svc.DecideApprovalAs(r.Context(), pathParam(r, "id"), req.Decision, req.Note, consoleActor)
 	if err != nil {
 		handleServiceErr(w, err)
 		return
@@ -323,7 +326,7 @@ func (s *Server) apiCreateDecision(w http.ResponseWriter, r *http.Request) {
 	if req.Status == "" {
 		req.Status = "made"
 	}
-	d, err := s.svc.CreateDecision(r.Context(), pathParam(r, "id"), req.Kind, req.Status, req.Title, req.Body)
+	d, err := s.svc.CreateDecisionAs(r.Context(), pathParam(r, "id"), req.Kind, req.Status, req.Title, req.Body, consoleActor)
 	if err != nil {
 		handleServiceErr(w, err)
 		return
@@ -378,7 +381,7 @@ func (s *Server) apiCreateMemory(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, http.StatusBadRequest, "bad_request", "company_id, type and title are required")
 		return
 	}
-	m, err := s.svc.CreateMemory(r.Context(), pathParam(r, "id"), req.Type, req.Title, req.Content, req.Source, req.Tags)
+	m, err := s.svc.CreateMemoryAs(r.Context(), pathParam(r, "id"), req.Type, req.Title, req.Content, req.Source, req.Tags, consoleActor)
 	if err != nil {
 		handleServiceErr(w, err)
 		return
@@ -430,7 +433,7 @@ func (s *Server) apiAddEndpoint(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, http.StatusBadRequest, "bad_request", "company_id, name and base_url are required")
 		return
 	}
-	e, err := s.svc.AddEndpoint(r.Context(), req.CompanyID, req.Name, req.BaseURL, req.Token, req.Proto)
+	e, err := s.svc.AddEndpointAs(r.Context(), req.CompanyID, req.Name, req.BaseURL, req.Token, req.Proto, consoleActor)
 	if err != nil {
 		handleServiceErr(w, err)
 		return
@@ -446,7 +449,7 @@ func (s *Server) apiSelectEndpointModel(w http.ResponseWriter, r *http.Request) 
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	e, err := s.svc.SelectEndpointModel(r.Context(), pathParam(r, "id"), req.Model, req.Role)
+	e, err := s.svc.SelectEndpointModelAs(r.Context(), pathParam(r, "id"), req.Model, req.Role, consoleActor)
 	if err != nil {
 		handleServiceErr(w, err)
 		return
@@ -455,7 +458,7 @@ func (s *Server) apiSelectEndpointModel(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) apiFetchEndpointModels(w http.ResponseWriter, r *http.Request) {
-	models, err := s.svc.FetchEndpointModels(r.Context(), pathParam(r, "id"))
+	models, err := s.svc.FetchEndpointModelsAs(r.Context(), pathParam(r, "id"), consoleActor)
 	if err != nil {
 		handleServiceErr(w, err)
 		return
@@ -485,7 +488,7 @@ func (s *Server) apiAddRepo(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, http.StatusBadRequest, "bad_request", "company_id, name and repo_url are required")
 		return
 	}
-	repo, err := s.svc.AddRepo(r.Context(), pathParam(r, "id"), req.Name, req.RepoURL, req.Workspace)
+	repo, err := s.svc.AddRepoAs(r.Context(), pathParam(r, "id"), req.Name, req.RepoURL, req.Workspace, consoleActor)
 	if err != nil {
 		handleServiceErr(w, err)
 		return

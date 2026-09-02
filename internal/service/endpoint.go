@@ -17,6 +17,11 @@ const modelsTimeout = 20 * time.Second
 
 // AddEndpoint 接入一个模型端点:proto 校验、域名自动识别 vendor/proto、token 加密落库。写操作落 Audit。
 func (s *Service) AddEndpoint(ctx context.Context, companyID, name, baseURL, token, proto string) (endpoint.Endpoint, error) {
+	return s.AddEndpointAs(ctx, companyID, name, baseURL, token, proto, "human:cli")
+}
+
+// AddEndpointAs 同 AddEndpoint,审计 actor 用传入值(如 human:console)。
+func (s *Service) AddEndpointAs(ctx context.Context, companyID, name, baseURL, token, proto, actor string) (endpoint.Endpoint, error) {
 	if companyID == "" || name == "" || baseURL == "" {
 		return endpoint.Endpoint{}, fmt.Errorf("--company, --name and --base-url are required")
 	}
@@ -47,7 +52,7 @@ func (s *Service) AddEndpoint(ctx context.Context, companyID, name, baseURL, tok
 	if err != nil {
 		return endpoint.Endpoint{}, err
 	}
-	_, err = s.audit(ctx, "endpoint", created.ID, "create", "human:cli", name+" "+baseURL)
+	_, err = s.audit(ctx, "endpoint", created.ID, "create", actor, name+" "+baseURL)
 	return created, err
 }
 
@@ -62,6 +67,11 @@ func (s *Service) GetEndpoint(ctx context.Context, id string) (endpoint.Endpoint
 // FetchEndpointModels 测试连接并拉取 /v1/models,结果缓存 models_cache,返回可用模型列表。
 // 返回的每个模型以 {ID: true} 形式给出,供 select 使用。
 func (s *Service) FetchEndpointModels(ctx context.Context, id string) ([]endpoint.ModelInfo, error) {
+	return s.FetchEndpointModelsAs(ctx, id, "human:cli")
+}
+
+// FetchEndpointModelsAs 同 FetchEndpointModels,审计 actor 用传入值。
+func (s *Service) FetchEndpointModelsAs(ctx context.Context, id, actor string) ([]endpoint.ModelInfo, error) {
 	e, err := s.store.GetEndpoint(ctx, id)
 	if err != nil {
 		return nil, err
@@ -82,12 +92,17 @@ func (s *Service) FetchEndpointModels(ctx context.Context, id string) ([]endpoin
 	if _, err := s.store.SetEndpointModel(ctx, e.ID, e.SelectedModel, string(body)); err != nil {
 		return nil, err
 	}
-	_, err = s.audit(ctx, "endpoint", e.ID, "models", "human:cli", fmt.Sprintf("%d model(s) cached", len(models)))
+	_, err = s.audit(ctx, "endpoint", e.ID, "models", actor, fmt.Sprintf("%d model(s) cached", len(models)))
 	return models, err
 }
 
 // SelectEndpointModel 选定模型(可选同时指派 role)。写操作落 Audit。
 func (s *Service) SelectEndpointModel(ctx context.Context, id, model, role string) (endpoint.Endpoint, error) {
+	return s.SelectEndpointModelAs(ctx, id, model, role, "human:cli")
+}
+
+// SelectEndpointModelAs 同 SelectEndpointModel,审计 actor 用传入值(如 human:console)。
+func (s *Service) SelectEndpointModelAs(ctx context.Context, id, model, role, actor string) (endpoint.Endpoint, error) {
 	if model == "" {
 		return endpoint.Endpoint{}, fmt.Errorf("--model is required")
 	}
@@ -106,7 +121,7 @@ func (s *Service) SelectEndpointModel(ctx context.Context, id, model, role strin
 			return endpoint.Endpoint{}, err
 		}
 	}
-	_, err = s.audit(ctx, "endpoint", e.ID, "select", "human:cli", model+" role="+e.Role)
+	_, err = s.audit(ctx, "endpoint", e.ID, "select", actor, model+" role="+e.Role)
 	return e, err
 }
 

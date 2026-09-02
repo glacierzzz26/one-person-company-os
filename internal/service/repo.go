@@ -11,6 +11,11 @@ import (
 
 // AddRepo 登记一个研发仓库。写操作落 Audit。
 func (s *Service) AddRepo(ctx context.Context, companyID, name, repoURL, workspacePath string) (osrepo.Repo, error) {
+	return s.AddRepoAs(ctx, companyID, name, repoURL, workspacePath, "human:cli")
+}
+
+// AddRepoAs 同 AddRepo,审计 actor 用传入值(如 human:console)。
+func (s *Service) AddRepoAs(ctx context.Context, companyID, name, repoURL, workspacePath, actor string) (osrepo.Repo, error) {
 	if companyID == "" || name == "" || repoURL == "" {
 		return osrepo.Repo{}, fmt.Errorf("--company, --name and --repo-url are required")
 	}
@@ -22,7 +27,7 @@ func (s *Service) AddRepo(ctx context.Context, companyID, name, repoURL, workspa
 	if err != nil {
 		return osrepo.Repo{}, err
 	}
-	_, err = s.audit(ctx, "repo", created.ID, "create", "human:cli", repoURL+" "+workspacePath)
+	_, err = s.audit(ctx, "repo", created.ID, "create", actor, repoURL+" "+workspacePath)
 	return created, err
 }
 
