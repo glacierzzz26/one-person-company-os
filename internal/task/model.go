@@ -1,32 +1,32 @@
 package task
 
 type Task struct {
-	ID            string
-	CompanyID     string
-	CapabilityID  *string
-	WorkflowID    *string
-	AgentID       *string
-	Title         string
-	Description   string
-	ToolName      string // 执行该 Task 的 Tool 名(默认 shell;engineering = Engineering Driver)
-	Status        string // 业务状态: pending | running | waiting_approval | completed | failed
-	Priority      int64
-	Attempt       int64
-	Risk          string // low | medium | high
-	QStatus       string // 队列状态: ready | leased | running | waiting_approval | completed | failed
-	LeaseWorkerID string
-	LeaseUntil    int64
-	MaxAttempts   int64
-	TimeoutSec    int64
-	LastError     string
-	Result        string
-	WorkspacePath string
+	ID            string  `json:"id"`
+	CompanyID     string  `json:"company_id"`
+	CapabilityID  *string `json:"capability_id"`
+	WorkflowID    *string `json:"workflow_id"`
+	AgentID       *string `json:"agent_id"`
+	Title         string  `json:"title"`
+	Description   string  `json:"description"`
+	ToolName      string  `json:"tool_name"` // 执行该 Task 的 Tool 名(默认 shell;engineering = Engineering Driver)
+	Status        string  `json:"status"`    // 业务状态: pending | running | waiting_approval | completed | failed
+	Priority      int64   `json:"priority"`
+	Attempt       int64   `json:"attempt"`
+	Risk          string  `json:"risk"`     // low | medium | high
+	QStatus       string  `json:"q_status"` // 队列状态: ready | leased | running | waiting_approval | completed | failed
+	LeaseWorkerID string  `json:"lease_worker_id"`
+	LeaseUntil    int64   `json:"lease_until"`
+	MaxAttempts   int64   `json:"max_attempts"`
+	TimeoutSec    int64   `json:"timeout_sec"`
+	LastError     string  `json:"last_error"`
+	Result        string  `json:"result"`
+	WorkspacePath string  `json:"workspace_path"`
 	// Phase 6.2:Engineering Driver 回合状态(回合在驱动内部,不另建状态机)。
-	ParentTaskID       *string // planner 拆解的子任务挂父请求;空 = 顶层任务
-	RoundNo            int64   // 当前评审回合(写→测→审为一轮)
-	ConflictCount      int64   // reviewer 驳回累计;test 失败不累计
-	WriterEndpointID   *string // 写者模型端点;空 = agent 默认
-	ReviewerEndpointID *string // 审阅模型端点;空 = agent 默认
-	CreatedAt          int64
-	UpdatedAt          int64
+	ParentTaskID       *string `json:"parent_task_id"`       // planner 拆解的子任务挂父请求;空 = 顶层任务
+	RoundNo            int64   `json:"round_no"`             // 当前评审回合(写→测→审为一轮)
+	ConflictCount      int64   `json:"conflict_count"`       // reviewer 驳回累计;test 失败不累计
+	WriterEndpointID   *string `json:"writer_endpoint_id"`   // 写者模型端点;空 = agent 默认
+	ReviewerEndpointID *string `json:"reviewer_endpoint_id"` // 审阅模型端点;空 = agent 默认
+	CreatedAt          int64   `json:"created_at"`
+	UpdatedAt          int64   `json:"updated_at"`
 }

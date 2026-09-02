@@ -35,6 +35,8 @@ func serverCmd() *cobra.Command {
 			if err := srv.SetDigestTime(digest); err != nil {
 				return err
 			}
+			// /api/v1 访问令牌(Phase 7.1):设了 OS_API_TOKEN → API 要求 Bearer;空 = 开放。
+			srv.SetAPIToken(os.Getenv("OS_API_TOKEN"))
 
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -45,7 +47,11 @@ func serverCmd() *cobra.Command {
 				feishu = "on (OS_FEISHU_WEBHOOK)"
 			}
 			fmt.Printf("os server listening on %s (github poll every %d min; ctrl-c to stop)\n", addr, pollMin)
-			fmt.Printf("feishu notify: %s | daily digest: %s\n", feishu, srv.DigestTime())
+			api := "open"
+			if srv.APITokenSet() {
+				api = "on (OS_API_TOKEN)"
+			}
+			fmt.Printf("feishu notify: %s | daily digest: %s | /api/v1 auth: %s\n", feishu, srv.DigestTime(), api)
 
 			go srv.PollLoop(ctx)
 			go srv.DigestLoop(ctx)

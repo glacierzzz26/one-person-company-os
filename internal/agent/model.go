@@ -1,11 +1,11 @@
 package agent
 
 type Agent struct {
-	ID           string
-	CapabilityID string
-	Name         string
-	Role         string
-	ModelHint    string
-	CreatedAt    int64
-	UpdatedAt    int64
+	ID           string `json:"id"`
+	CapabilityID string `json:"capability_id"`
+	Name         string `json:"name"`
+	Role         string `json:"role"`
+	ModelHint    string `json:"model_hint"`
+	CreatedAt    int64  `json:"created_at"`
+	UpdatedAt    int64  `json:"updated_at"`
 }

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -31,9 +32,17 @@ type Server struct {
 	svc  *service.Service
 	poll time.Duration
 
-	digestEnabled bool
+	digestEnabled    bool
 	digestH, digestM int // 每日摘要时刻(HH:MM,本地时区)
+
+	apiToken string // /api/v1 bearer 校验(OS_API_TOKEN);空 = 开放
 }
+
+// SetAPIToken 配置 /api/v1 访问令牌(空 = 不校验)。用于注入 OS_API_TOKEN(CLI)或测试直构。
+func (s *Server) SetAPIToken(tok string) { s.apiToken = tok }
+
+// APITokenSet /api/v1 认证是否开启(日志/启动提示用,不泄漏 token)。
+func (s *Server) APITokenSet() bool { return s.apiToken != "" }
 
 func New(svc *service.Service, pollMinutes int) *Server {
 	if pollMinutes <= 0 {
@@ -132,7 +141,31 @@ func (s *Server) Handler() http.Handler {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 	r.Post("/api/webhook/github", s.handleGitHubWebhook)
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(s.apiAuth)
+		s.registerAPIRoutes(r)
+	})
 	return r
+}
+
+// apiAuth /api/v1 bearer 校验(Phase 7.1):配了 apiToken 时要求
+// `Authorization: Bearer <token>`(constant-time);未配 → 开放(单算子本地姿态,暴露到公网务必配)。
+func (s *Server) apiAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.apiToken == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		got := ""
+		if h := r.Header.Get("Authorization"); len(h) > 7 && h[:7] == "Bearer " {
+			got = h[7:]
+		}
+		if got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(s.apiToken)) != 1 {
+			writeJSON(w, http.StatusUnauthorized, map[string]any{"ok": false, "error": map[string]string{"code": "unauthorized", "message": "invalid or missing bearer token"}})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // PollLoop 后台轮询:启动即兜底同步一次,随后每 poll 间隔 SyncRepos 一次,直到 ctx 结束。

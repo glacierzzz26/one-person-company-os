@@ -37,20 +37,21 @@ const (
 	engDispMerge      = "merge"
 )
 
-// IntakeResult 是单仓库一次同步的结果(供 CLI/server 汇总展示)。
+// IntakeResult 是单仓库一次同步的结果(供 CLI/server 汇总展示)。json tag = /api/v1 契约(phase7)。
 type IntakeResult struct {
-	Repo         string
-	IssuesSeen   int
-	Already      int            // 账本已存在(webhook/轮询去重)跳过数
-	ByDisp       map[string]int // disposition → 条数
-	CreatedTasks []string       // direct_work 建出的 task id
-	Asks         []intakeAsk    // 待回帖的追问(live GitHub 源在 issue 下评论)
+	Repo         string         `json:"repo"`
+	IssuesSeen   int            `json:"issues_seen"`
+	Already      int            `json:"already"`       // 账本已存在(webhook/轮询去重)跳过数
+	ByDisp       map[string]int `json:"by_disp"`       // disposition → 条数
+	CreatedTasks []string       `json:"created_tasks"` // direct_work 建出的 task id
+	Asks         []intakeAsk    `json:"asks"`          // 待回帖的追问(live GitHub 源在 issue 下评论)
 }
 
 type intakeAsk struct {
-	Owner, Name string
-	Number      int64
-	Note        string
+	Owner  string `json:"owner"`
+	Name   string `json:"name"`
+	Number int64  `json:"number"`
+	Note   string `json:"note"`
 }
 
 // SyncRepos 拉取仓库(companyID 空 = 全部公司)的 open issues 并分诊入库。

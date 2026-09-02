@@ -13,57 +13,57 @@ import (
 	"github.com/glacierzzz26/one-person-company-os/internal/workflow"
 )
 
-// Overview 全景运营视图(一人操作台):只读聚合,突出「需要人决策的事项」。
+// Overview 全景运营视图(一人操作台):只读聚合,突出「需要人决策的事项」。json tag = /api/v1 契约(phase7)。
 type Overview struct {
-	Company          company.Company
-	Capabilities     []CapabilityView    // code × agent 数
-	Workflows        []WorkflowView      // 最近 workflow + 任务状态计数
-	PendingApprovals []ApprovalView      // 所有 pending 审批 + 任务标题
-	RecentDecisions  []decision.Decision // 最近 5 条
-	RecentTasks      []task.Task         // 最近 8 条
-	MemoryHighlights []memory.Memory     // 最近 5 条 lesson/knowledge
-	RD               *RDOverview         // 研发部(engineering Capability 部门视图,6.5);无 engineering → nil
+	Company          company.Company     `json:"company"`
+	Capabilities     []CapabilityView    `json:"capabilities"`      // code × agent 数
+	Workflows        []WorkflowView      `json:"workflows"`         // 最近 workflow + 任务状态计数
+	PendingApprovals []ApprovalView      `json:"pending_approvals"` // 所有 pending 审批 + 任务标题
+	RecentDecisions  []decision.Decision `json:"recent_decisions"`  // 最近 5 条
+	RecentTasks      []task.Task         `json:"recent_tasks"`      // 最近 8 条
+	MemoryHighlights []memory.Memory     `json:"memory_highlights"` // 最近 5 条 lesson/knowledge
+	RD               *RDOverview         `json:"rd"`                // 研发部(engineering Capability 部门视图,6.5);无 engineering → nil
 }
 
 type CapabilityView struct {
-	Code       string
-	Name       string
-	AgentCount int
+	Code       string `json:"code"`
+	Name       string `json:"name"`
+	AgentCount int    `json:"agent_count"`
 }
 
 type WorkflowView struct {
-	Workflow workflow.Workflow
-	Statuses map[string]int64 // status → count
+	Workflow workflow.Workflow `json:"workflow"`
+	Statuses map[string]int64  `json:"statuses"` // status → count
 }
 
 type ApprovalView struct {
-	Approval  approval.Approval
-	TaskTitle string
+	Approval  approval.Approval `json:"approval"`
+	TaskTitle string            `json:"task_title"`
 }
 
 // RDOverview 研发部状态聚合(6.5):engineering Capability 部门视图。
 // RD 任务 = capability=engineering 或 tool=engineering(拆解子任务继承 capability,天然落入)。
 type RDOverview struct {
-	CapabilityID string
-	Total        int              // RD 任务总数
-	ByStatus     map[string]int64 // status → count
-	Fused        []RDTask         // 熔断:评审驳回达阈值转人工(waiting_approval)
-	Waiting      []RDTask         // 其余待审批(waiting_approval,ask/高险门)
-	SubtaskCount int              // parent_task_id 非空子任务数
-	Ledger       map[string]int64 // 通道 B issue_sync 账本 disposition 分布(处置分布/去重计数)
-	LedgerSeen   int              // 账本总条数(=已同步 issue 去重计数)
+	CapabilityID string           `json:"capability_id"`
+	Total        int              `json:"total"`         // RD 任务总数
+	ByStatus     map[string]int64 `json:"by_status"`     // status → count
+	Fused        []RDTask         `json:"fused"`         // 熔断:评审驳回达阈值转人工(waiting_approval)
+	Waiting      []RDTask         `json:"waiting"`       // 其余待审批(waiting_approval,ask/高险门)
+	SubtaskCount int              `json:"subtask_count"` // parent_task_id 非空子任务数
+	Ledger       map[string]int64 `json:"ledger"`        // 通道 B issue_sync 账本 disposition 分布(处置分布/去重计数)
+	LedgerSeen   int              `json:"ledger_seen"`   // 账本总条数(=已同步 issue 去重计数)
 }
 
 // RDTask 研发任务行视图。
 type RDTask struct {
-	ID           string
-	Title        string
-	Status       string
-	Risk         string
-	Round        int64
-	Conflict     int64
-	ParentTaskID *string
-	Reason       string // waiting_approval 原因(熔断/ask/高险门)
+	ID           string  `json:"id"`
+	Title        string  `json:"title"`
+	Status       string  `json:"status"`
+	Risk         string  `json:"risk"`
+	Round        int64   `json:"round"`
+	Conflict     int64   `json:"conflict"`
+	ParentTaskID *string `json:"parent_task_id"`
+	Reason       string  `json:"reason"` // waiting_approval 原因(熔断/ask/高险门)
 }
 
 func (s *Service) Overview(ctx context.Context, companyID string) (*Overview, error) {
