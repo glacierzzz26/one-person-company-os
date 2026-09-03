@@ -71,6 +71,14 @@
 
 - **7.2(本阶段,✅ 冻结)**:actor 贯通 + QueueLoop 代码落地(httptest + 离线真实 server 冒烟
   `create human:console → runtime:server → completed`);设计文档 + 可交互原型。
-- **7.3(未来)**:React + TS + AntD SPA 接本契约(embed 单二进制或分离部署,届时用户定);
-  分页/CORS 按需补(见 web-console.md §一「不做」)。
-- 验收口径:原型 8 视图全部可点、状态变化可回退刷新;每卡端点徽标在 7.3 即联调清单。
+- **7.3(2026-09-03,✅ 实现完成,归档见 [stage 3](../stages/3.md))**:React 18 + TS + AntD v5 SPA 落地在仓库根
+  `web/`(Vite;`go:embed` 单二进制,`os server` 同源托管 —— 方案即上文 7.2 候选的「embed 单二进制」);8 视图全部
+  接真 `/api/v1`,字段/枚举与后端 json tag 逐字一致。与本文差异仅记录的实现取舍(非契约变更):
+  - 部署 = `internal/console`(stdlib)+ `make ui` 拷 `web/dist` 进 embed 目录;dev = `npm run dev` + vite proxy → 8787。
+  - 双主题经 AntD ConfigProvider token + CSS 变量(`data-theme` 三态),不引外部字体/图标字体(离线单二进制)。
+  - 部分只在原型出现的 mock 形状在真实契约下不存在/不同,按「数据保真」处理(见上 §五与 stage 3 已知差异表):
+    审批中心行标题懒取 `/tasks/{id}`;端点只显 `token_enc` 非空指示;账本/状态/枚举用真键;`overview` 空态
+    capabilities/workflows/pending_approvals 为 JSON null → 前端兜底空数组。
+  - 分页/CORS 仍按需补(见 web-console.md §一「不做」),未在本阶段引入。
+- 验收口径:原型 8 视图全部可点、状态变化可回退刷新;每卡端点徽标在 7.3 即联调清单 —— 7.3 已按此跑通
+  tsc/build/go test + 离线 `os server` smoke(SPA + client 路由 fallback + 建公司 → overview RD null)。

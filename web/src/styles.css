@@ -1,0 +1,173 @@
+/* Phase 7.3 控制台全局样式:令牌与原型 console-ui-prototype.html 一致(明/暗双套),
+ * 由 <html data-theme> 切换 —— ThemeProvider 恒把生效态写上去。antd 组件色由 ConfigProvider
+ * token 驱动;这里是图表/文字辅助类与少量 antd 覆盖。 */
+
+:root {
+  --bg: #eef1f6;
+  --surface: #ffffff;
+  --surface-2: #f6f8fb;
+  --line: #e2e8f1;
+  --line-2: #cfd8e5;
+  --text: #1c2430;
+  --text-2: #5c6b7f;
+  --text-3: #8d99aa;
+  --accent: #2f54eb;
+  --accent-hi: #2447d0;
+  --accent-soft: #eaefff;
+  --ok: #1a9e65;
+  --ok-soft: #e5f6ee;
+  --warn: #c9861a;
+  --warn-soft: #faf1df;
+  --crit: #d43b52;
+  --crit-soft: #fbe9ec;
+  --side-bg: #141a26;
+  --side-bg2: #101725;
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  --bg: #0e131c;
+  --surface: #161d29;
+  --surface-2: #1b2431;
+  --line: #26303f;
+  --line-2: #334053;
+  --text: #e6ebf2;
+  --text-2: #9aabbe;
+  --text-3: #6b7a8e;
+  --accent: #6a83ff;
+  --accent-hi: #8397ff;
+  --accent-soft: #1d2547;
+  --ok: #3cb782;
+  --ok-soft: #13301f;
+  --warn: #dca845;
+  --warn-soft: #33270f;
+  --crit: #ea6f82;
+  --crit-soft: #3a1620;
+  --side-bg: #0b1018;
+  --side-bg2: #090d13;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  min-height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 14px/1.6 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.muted {
+  color: var(--text-2);
+}
+.dim {
+  color: var(--text-3);
+}
+.grow {
+  flex: 1;
+}
+
+/* 状态胶囊(仿原型 .pill):软底 + 语义文本 */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 999px;
+  padding: 1px 9px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.pill i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.pill-ok { background: var(--ok-soft); color: var(--ok); }
+.pill-crit { background: var(--crit-soft); color: var(--crit); }
+.pill-warn { background: var(--warn-soft); color: var(--warn); }
+.pill-accent { background: var(--accent-soft); color: var(--accent); }
+.pill-muted { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--line); }
+
+/* 语义色小件(图表条/图例点/风险文本) */
+.sb-ok { background: var(--ok); }
+.sb-crit { background: var(--crit); }
+.sb-warn { background: var(--warn); }
+.sb-accent { background: var(--accent); }
+.sb-muted { background: var(--text-3); }
+.tx-ok { color: var(--ok); }
+.tx-crit { color: var(--crit); }
+.tx-warn { color: var(--warn); }
+.hl {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+/* antd Layout 底色跟随 --bg;Sider/Header 由 AppLayout 单独着色 */
+.ant-layout {
+  background: var(--bg);
+}
+
+/* 表格行点击态 */
+.row-click {
+  cursor: pointer;
+}
+.row-click:hover > td {
+  background: var(--surface-2) !important;
+}
+
+/* 薄卡片式描述(任务抽屉 KV) */
+.dl-kv {
+  display: grid;
+  grid-template-columns: 104px 1fr;
+  gap: 8px 14px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.dl-kv dt {
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+.dl-kv dd {
+  margin: 0;
+  word-break: break-all;
+  line-height: 1.7;
+}
+
+.sect-h {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin: 20px 0 10px;
+  font-weight: 700;
+}
+
+/* 滚动条随主题 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

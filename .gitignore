@@ -10,3 +10,10 @@ os.db
 
 # 临时文件
 /tmp/
+
+# Web 运营控制台(Phase 7.3)
+web/node_modules/
+web/dist/
+# go:embed 目录内仅提交占位 index.html;make ui 拷入的构建产物全部忽略
+internal/console/ui/*
+!internal/console/ui/index.html

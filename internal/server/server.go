@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/glacierzzz26/one-person-company-os/internal/console"
 	"github.com/glacierzzz26/one-person-company-os/internal/github"
 	osrepo "github.com/glacierzzz26/one-person-company-os/internal/repo"
 	"github.com/glacierzzz26/one-person-company-os/internal/service"
@@ -154,6 +155,9 @@ func (s *Server) Handler() http.Handler {
 		r.Use(s.apiAuth)
 		s.registerAPIRoutes(r)
 	})
+	// Phase 7.3 — Web 运营控制台(React SPA,go:embed 同源)。挂在最后:上面已注册的
+	// /healthz、/api/webhook/github、/api/v1/* 优先;/* 兜底其余 GET(assets + 客户端路由)。
+	r.Handle("/*", console.Handler())
 	return r
 }
 
