@@ -4,4 +4,5 @@
 
 | 文档 | 状态 | 定稿日期 |
 |---|---|---|
-| [model-runtime.md](model-runtime.md) | ✅ 定稿 | 2026-09-04 |
+| [model-runtime.md](model-runtime.md) | ✅ 定稿(方向) | 2026-09-04 |
+| [provider-upgrade.md](provider-upgrade.md) | ✅ 定稿并已实施(Phase 8.1 实施契约;OpenAI 兼容网关单适配,含修订 A) | 2026-09-04 |

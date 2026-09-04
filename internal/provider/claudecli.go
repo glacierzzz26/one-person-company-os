@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+// Deprecated: ClaudeCLI 是 0-7 保留的 legacy 文本补全后端(exec claude -p,文本进/文本出)。
+// 8.1 起模型文本与工具调用改走自建网关的 OpenAI 兼容 Chat(Chatter / OpenAI 实现,见 openai.go);
+// claude Code agent 委派属 8.5(独立路径,复用 claude 二进制 agent 模式,非本类型)。0-7 路径继续可用。
+//
 // ClaudeCLI 是真调 claude CLI 无头模式(claude -p)的 Provider(Phase 6.1)。
 // 换端点/换模型 = 换环境变量,零改码:ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL。
 // 凭据两路:apiKeyEnv = API key 所在环境变量名(config 声明),Generate 时实时读取;

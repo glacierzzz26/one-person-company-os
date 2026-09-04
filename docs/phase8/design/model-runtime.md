@@ -4,6 +4,9 @@
 > 承接:方向基线 v1.1(`Agent → Runtime → Model`)、Phase 6(端点池/回合机/熔断/planner 拆解)、
 > Phase 7(控制台经 `/api/v1` 配端点/建工程请求)。
 > 触发:用户方向纠正 ——「claude 应该只是一个工具才对:高智模型拆分,普通模型 + claude 干活」。
+> 修订 A(2026-09-04,方向补充,已定稿):用户自建 **OpenAI 兼容 API 网关**(单 key 聚合多厂商、支持 function calling 透传);
+> OS 不再按厂商适配 —— 8.1 由「anthropic/openai 双原生实现」收敛为「**单一 Chat Completions 兼容适配器对接网关**」;
+> 选模型 = 网关模型目录内按档/角色挑;tier 档位与 claude Code agent 委派(8.5)原案保留。受影响段:§一 目标1、§三、§四 D1、§六 8.1/8.2、§八 验收 2,详见 §十一。
 
 ## 一、定位与目标
 
@@ -19,7 +22,7 @@ claude 从唯一后端**降为池中一个可调用的 agent 工具**;Go 保留�
 
 三个目标(验收时逐条可证):
 
-1. **多厂商可真用**:anthropic / openai / 任何兼容端点都能作为「普通模型 / 高智模型」接入池子并真实生成(不再只有 claude)。
+1. **模型池可真用**(修订 A):自建 OpenAI 兼容网关(单 key)聚合多厂商,**厂商适配归网关**;OS 对接网关即可把任意网关模型按档接入池子并真实生成(不再只有 claude CLI)。
 2. **阶段原生工具调用**:工程回合(writer/test/review/planner)里,模型能真正调工具 —— 在工作区写/改文件、跑测试、取回结果再决策,收敛信号结构化;不再靠正则解析 PATCH/VERDICT 文本。
 3. **角色分层强制**:端点带档位,角色默认档位映射落成建单/执行的确定性规则,成本可控、可解释。
 
@@ -47,10 +50,10 @@ claude 从唯一后端**降为池中一个可调用的 agent 工具**;Go 保留�
 │     apply_diff(把模型产出落成真实改动)… 以及一个特殊工具:claude(Code) 委派                      │
 └───────────────┬──────────────────────────────────────────────────────────────┬───────────────┘
                 ▼                                                                ▼
-    模型端点池(多厂商 · 多档)                                        claude = 池中一个工具
-    anthropic / openai / 兼容 HTTP 端点                               (vendor=claude 型端点,回合中
-    每端点带 tier: frontier|standard|cheap                           可把有界子任务委派给它,在任务
-    role 语义保留 pool|planner|standby                                workspace 内运行,结果回传)
+    模型端点池(OpenAI 兼容网关 · 多档)                                claude(Code agent)= 一个可调工具
+    同一自建网关、单 key,按所选模型建多档端点                        (回合中模型可把有界子任务委派给它,
+    每端点带 tier: frontier|standard|cheap                           在任务 workspace 内自主干活,结果回传;
+    role 语义保留 pool|planner|standby                               修订 A 保留,独立于网关模型调用)
 ```
 
 **角色 → 档位默认映射(定稿 2026-09-04;显式端点永远覆盖默认)**:
@@ -66,9 +69,10 @@ claude 从唯一后端**降为池中一个可调用的 agent 工具**;Go 保留�
 
 ## 四、方向决策(定稿点,每条含取舍)
 
-- **D1 Provider 契约升级**:`Generate(prompt)→text` ⇒ `Chat(messages, tools) → (text | tool_calls…)`,
-  多轮、原生工具调用。新增 anthropic(Messages API)/openai(Chat Completions 及兼容)**原生 HTTP 实现**;
-  `scripted` 保留为确定性档(工具语义下仍可复现);现有 Generate 调用方经薄适配保留(标废弃),不炸 0–7 语义。
+- **D1 Provider 契约升级**(修订 A):`Generate(prompt)→text` ⇒ `Chat(messages, tools) → (text | tool_calls…)`,
+  多轮、原生工具调用。**不再按厂商写原生实现**:OS 只实现一个 **OpenAI Chat Completions 兼容 HTTP 客户端**,
+  对接用户自建网关(单 key;function calling 由网关透传底层模型);`scripted` 保留为确定性档(工具语义下仍可复现);
+  现有 Generate 调用方经薄适配保留(标废弃),不炸 0–7 语义。
 - **D2 阶段工具化**:回合内模型可发起工具调用,Go 在任务 workspace 执行并回填,循环至结构化收敛
   (apply 落盘 / TEST 判读 / VERDICT 裁决 / plan 拆解);工作区有路径即真执行,无路径保持纯产出(diff)向后兼容。
 - **D3 档位落库与默认分层**:endpoint 增 `tier`;角色默认映射(§三表)在建单解析端点时生效;控制台/CLI 可见端点 tier 与角色默认。
@@ -87,8 +91,8 @@ claude 从唯一后端**降为池中一个可调用的 agent 工具**;Go 保留�
 
 | 子阶段 | 交付物 | 验证 |
 |---|---|---|
-| 8.1 Provider 抽象升级 | messages+tools 契约;anthropic/openai HTTP 实现;claude CLI 标废弃保留;scripted 保真 | httptest:各厂商请求/响应形状 + tool_calls 回传;`go test ./...` 绿 |
-| 8.2 阶段工具化首个闭环 | writer/test 其中一个阶段先跑通「模型调工具→Go 执行→回填→收敛」真实 loop(fake HTTP vendor server 驱动) | 单阶段 tool 回合 httptest;scripted 回归不变 |
+| 8.1 Provider 抽象升级 | messages+tools 契约(OpenAI Chat Completions 方言);自建网关 HTTP 实现(单 key、工具透传);claude CLI 标废弃保留;scripted 保真 | httptest:网关请求/响应形状 + tool_calls 回传;`go test ./...` 绿 |
+| 8.2 阶段工具化首个闭环 | writer/test 其中一个阶段先跑通「模型调工具→Go 执行→回填→收敛」真实 loop(fake OpenAI 兼容网关服务器驱动) | 单阶段 tool 回合 httptest;scripted 回归不变 |
 | 8.3 全阶段工具化 | planner/writer/test/review 全部切原生 tool-call,结构化收敛替换正则抠取 | 离线真实 server 冒烟(scripted 下跑通整条);熔断/审批语义回归 |
 | 8.4 档位分层强制 | endpoint.tier(迁移 0010)+ 角色默认解析 + CLI/控制台可见 | 建单不指定端点 → 按默认档落到对应端点;显式覆盖仍生效 |
 | 8.5 claude 委派工具 | vendor=claude agent 工具(workspace 内子代理,结果回传)+ 边界 | 冒烟:回合内委派一次 claude 完成小活并回传;live 真实 key 验收归用户 |
@@ -104,7 +108,7 @@ claude 从唯一后端**降为池中一个可调用的 agent 工具**;Go 保留�
 ## 八、验收口径
 
 1. `go build ./...`、`go test ./...` 全绿;0–7 既有测试(scripted 冒烟/httptest)零改动通过。
-2. 离线起 `os server`,控制台/CLI:端点池可加 anthropic 与 openai 两类端点并标注 tier;建工程请求不显式给端点时,按默认档自动落到对应端点(日志/审计可见所选模型)。
+2. 离线起 `os server`,控制台/CLI:端点池可从**网关模型目录**建多档端点(每档绑一个网关模型,proto=openai)并标注 tier;建工程请求不显式给端点时,按默认档自动落到对应端点(日志/审计可见所选模型)。
 3. 回合内模型确实在调工具(审计/日志可见 tool 名与执行),收敛信号结构化,不再依赖 PATCH/VERDICT 正则。
 4. claude 作为工具被委派一次有界子任务并在 workspace 内完成回传(live 需真实 key,归用户验收)。
 
@@ -112,7 +116,7 @@ claude 从唯一后端**降为池中一个可调用的 agent 工具**;Go 保留�
 
 - 关联:`docs/phase6/design/rd-capability.md`(端点池/回合机/planner)、`docs/phase7/design/console-ui.md`(端点池页)、
   方向基线 `One-Person-Company-OS-Design-v1.0.md`。
-- 本文件为**草案**;定稿后登记 `design/README.md`,并在 `进度总表.md`/`项目详解.md` 阶段表挂 Phase 8。
+- 本文件已**定稿**并登记 `design/README.md`、挂 Phase 8 到 `进度总表.md`/`项目详解.md`;后续方向变更以 §十一 修订记录为准。
 
 ## 十、定稿记录(2026-09-04,定稿门通过)
 
@@ -123,3 +127,12 @@ claude 从唯一后端**降为池中一个可调用的 agent 工具**;Go 保留�
 3. **writer 产出**:任务带工作区 → 真落盘 + test 真执行;无工作区 → 仍返 diff(向后兼容)。✅
 4. **子阶段切分**:认可 8.1–8.5 顺序(Provider 升级 → 单阶段 tool 闭环 → 全阶段 tool 化 →
    档位强制 → claude 委派工具),每子阶段独立可验收。✅
+
+## 十一、修订记录
+
+- **修订 A(2026-09-04,方向补充,已定稿)**:用户自建 OpenAI 兼容 API 网关(单 key,function calling 透传)。
+  8.1 由「anthropic/openai 双原生 HTTP 实现」收敛为「单一 Chat Completions 兼容适配器对接网关」;
+  「选模型」= 网关模型目录内按档/角色挑(目录拉取 `FetchEndpointModels` 6.1 已具备,建单默认落档属 8.4)。
+  tier 档位机制与 claude Code agent 委派(8.5)原案**保留**,与网关模型调用是两条正交路径。
+  受影响段落:§一 目标1、§三 架构图左栏与 claude 注、§四 D1、§六 8.1/8.2、§八 验收 2。
+  8.1 实施契约见 [provider-upgrade.md](provider-upgrade.md)。
