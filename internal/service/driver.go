@@ -80,6 +80,14 @@ func (s *Service) runEngineering(ctx context.Context, workerID string, t task.Ta
 		}
 	}
 
+	// writer live 委派前置(Phase 8.2 修订 B):认领起点须 git 且(首次)clean。
+	// 熔断续跑 humanOverride=true(残留 = 本任务先前产物)与 scripted 跳过,见 delegateBaseline。
+	if !humanOverride {
+		if err := s.delegateBaseline(runCtx, t); err != nil {
+			return s.engFail(ctx, t, "writer", runCtx, err)
+		}
+	}
+
 	for {
 		// writer 产出(每轮开头;test 免费返工在本轮内复用同一 writer 端点)
 		diff, err := s.runEngPhase(runCtx, workerID, t, engRoleWriter, round, conflict, humanOverride, 0,

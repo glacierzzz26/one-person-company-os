@@ -14,10 +14,13 @@ import (
 type Service struct {
 	store  *repository.Store
 	notify *notify.Notifier // 可选:飞书通知(Phase 6.5);nil = 禁用
+	// delegator 执行委派工具(Phase 8.2 修订 B:writer live = 委派集成 agent CLI)。
+	// 默认 claudeDelegator;测试注入 fake(记录 spec、向 workspace 落文件、返回 canned report)。
+	delegator Delegator
 }
 
 func New(store *repository.Store) *Service {
-	return &Service{store: store}
+	return &Service{store: store, delegator: &claudeDelegator{}}
 }
 
 // SetNotifier 注入飞书通知器(env OS_FEISHU_WEBHOOK 为空时传入 nil = 禁用)。

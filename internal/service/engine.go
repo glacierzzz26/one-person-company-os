@@ -12,13 +12,15 @@ import (
 	"github.com/glacierzzz26/one-person-company-os/internal/task"
 )
 
-// Engineering Driver 的模型调用分界(Phase 6.2)。
-// 三阶段(写/测/审)各自一次模型调用,输出走容错结构化解析(见下方 parse* 助手)。
-// 真实代码落盘/测试执行属于 6.3(repos);此处模型产出 diff 文本与 verdict,为 6.3 的
-// 落地动作留出衔接面。
+// Engineering Driver 的执行/判读分界(Phase 6.2 + Phase 8.2 修订 B)。
+// 三阶段(写/测/审)各自一次执行/模型调用,输出走容错结构化解析(见下方 parse* 助手)。
+//
+// 修订 B 后(2026-09-04):writer(需真动手的执行阶段)live = 委派集成 agent CLI(claude Code)
+// 在任务 git workspace 自主干,OS 用 git 捕获真实 diff(见 delegate.go delegateWriter);
+// 判读角色(planner/triage/test/review)live = 网关模型 text Chat(proto=openai,见下方 modelCall)。
 //
 // 模式切换(§12 #1 mock/real):OS_ENGINE_MODE
-//   - live(默认,缺省偏 fail-closed):端点行 → 解密 token → claude -p。任务未挂端点 → 清晰报错。
+//   - live(默认,缺省偏 fail-closed):writer → 委派(需 git workspace);判读 → 网关 text Chat。
 //   - scripted:确定性离线冒烟(test double);writer/test/review 结果由 env 控制:
 //        OS_SCRIPT_TEST   pass(默认)| fail-once(每轮首次失败后过) | fail-all
 //        OS_SCRIPT_REVIEW approve(默认)| reject(持续驳回直到熔断;humanOverride 后放行)
@@ -39,10 +41,18 @@ type engCallCtx struct {
 	prompt        string // 阶段指令 + 上下文(由 driver 组)
 }
 
-// engCall 执行一次工程阶段模型调用,返回模型原始输出。
+// engCall 执行一次工程阶段调用(live):writer → 委派集成 agent(git 捕获真实 diff);
+// 其余判读角色 → 网关 text Chat。scripted → engScripted(确定性,writer 返回假 diff)。
 func (s *Service) engCall(ctx context.Context, t task.Task, c engCallCtx) (string, error) {
 	if strings.EqualFold(os.Getenv("OS_ENGINE_MODE"), "scripted") {
 		return engScripted(c), nil
+	}
+	if c.role == engRoleWriter {
+		out, err := s.delegateWriter(ctx, t, c)
+		if err != nil {
+			return "", fmt.Errorf("engineering task %s: writer: %w", short8(t.ID), err)
+		}
+		return out, nil
 	}
 	epID := s.engEndpointFor(t, c.role)
 	if epID == "" {
@@ -62,17 +72,27 @@ func (s *Service) engCall(ctx context.Context, t task.Task, c engCallCtx) (strin
 	return out, nil
 }
 
-// modelCall 对给定端点执行一次真实模型提问(claude -p)。6.2 工程阶段与 6.3
-// intake triage 共用同一真实调用路径。token 解密不入日志。
+// modelCall 对给定端点执行一次网关判读(修订 B:OS 回合判读只走 text Chat)。
+// 端点必须 proto=openai(自建网关);claude CLI legacy(ClaudeCLI)不再被 modelCall 消费,
+// 其 Generate 路径仅 0-7 遗留消费方保留(provider 标 Deprecated,代码不动)。
+// planner 拆解与 intake triage 与 6.2 工程判读共用此路径,统一切网关。token 解密不入日志。
 func (s *Service) modelCall(ctx context.Context, e endpoint.Endpoint, prompt string) (string, error) {
+	if !strings.EqualFold(e.Proto, "openai") {
+		return "", fmt.Errorf("judging requires proto=openai gateway endpoint %q (proto=%s); add an OpenAI-compatible gateway endpoint", e.Name, e.Proto)
+	}
 	token, err := endpoint.OpenToken(e.TokenEnc)
 	if err != nil {
 		return "", err
 	}
-	p := provider.NewClaudeEndpoint(e.Name, e.SelectedModel, e.BaseURL, token)
-	resp, err := p.Generate(ctx, provider.Request{Prompt: prompt})
+	c := provider.NewOpenAI(e.BaseURL, token, e.SelectedModel)
+	resp, err := c.Chat(ctx, provider.ChatRequest{
+		Messages: []provider.Message{provider.User(prompt)},
+	})
 	if err != nil {
 		return "", err
+	}
+	if resp.FinishReason == "length" {
+		return "", fmt.Errorf("judge output truncated (finish_reason=length)")
 	}
 	return resp.Content, nil
 }
