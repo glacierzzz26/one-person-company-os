@@ -21,6 +21,11 @@ import type {
   ModelInfo,
   Overview,
   Repo,
+  RotateConsoleTokenReq,
+  RotateConsoleTokenResult,
+  SetupReq,
+  SetupResult,
+  SetupStatus,
   Task,
   Workflow,
 } from './types';
@@ -109,4 +114,10 @@ export const addRepo = (companyId: string, body: AddRepoReq) =>
   request<Repo>(`/api/v1/companies/${companyId}/repos`, { method: 'POST', body });
 export const intakeSync = (companyId: string) =>
   request<IntakeResult[]>(`/api/v1/companies/${companyId}/intake/sync`, { method: 'POST' });
+
+// ---- setup / console token(Phase 9.2,契约 console-access.md §3.6)----
+export const setupStatus = () => request<SetupStatus>('/api/v1/setup/status');
+export const runSetup = (body: SetupReq) => request<SetupResult>('/api/v1/setup', { method: 'POST', body });
+export const rotateConsoleToken = (body: RotateConsoleTokenReq) =>
+  request<RotateConsoleTokenResult>('/api/v1/settings/console-token', { method: 'PUT', body });
 

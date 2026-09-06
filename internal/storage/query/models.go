@@ -18,6 +18,19 @@ type Agent struct {
 	UpdatedAt    int64  `json:"updated_at"`
 }
 
+type AppSetting struct {
+	ID                string `json:"id"`
+	EngineModeDefault string `json:"engine_mode_default"`
+	AgentCliDefault   string `json:"agent_cli_default"`
+	ConsoleTokenHash  string `json:"console_token_hash"`
+	DigestTime        string `json:"digest_time"`
+	HttpPort          int64  `json:"http_port"`
+	PollMin           int64  `json:"poll_min"`
+	QueueWork         int64  `json:"queue_work"`
+	QueueIntervalSec  int64  `json:"queue_interval_sec"`
+	UpdatedAt         int64  `json:"updated_at"`
+}
+
 type Approval struct {
 	ID           string        `json:"id"`
 	TaskID       string        `json:"task_id"`
@@ -57,6 +70,15 @@ type Company struct {
 	Vision    string `json:"vision"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
+}
+
+type CompanySetting struct {
+	CompanyID        string         `json:"company_id"`
+	EngineMode       sql.NullString `json:"engine_mode"`
+	AgentCli         sql.NullString `json:"agent_cli"`
+	IssueSource      sql.NullString `json:"issue_source"`
+	IssueFixturePath sql.NullString `json:"issue_fixture_path"`
+	UpdatedAt        int64          `json:"updated_at"`
 }
 
 type Decision struct {
@@ -153,6 +175,13 @@ type Repo struct {
 	RepoUrl       string `json:"repo_url"`
 	WorkspacePath string `json:"workspace_path"`
 	CreatedAt     int64  `json:"created_at"`
+}
+
+type Secret struct {
+	CompanyID string `json:"company_id"`
+	ID        string `json:"id"`
+	Cipher    string `json:"cipher"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
 type Task struct {

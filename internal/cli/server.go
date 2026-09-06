@@ -37,8 +37,9 @@ func serverCmd() *cobra.Command {
 			if err := srv.SetDigestTime(digest); err != nil {
 				return err
 			}
-			// /api/v1 访问令牌(Phase 7.1):设了 OS_API_TOKEN → API 要求 Bearer;空 = 开放。
-			srv.SetAPIToken(os.Getenv("OS_API_TOKEN"))
+			// 主密钥落盘路径(Phase 9.2):os server 的 /setup 首启需写 <db>.key;鉴权已 DB 化(console
+			// token 哈希,读 app_setting),OS_API_TOKEN 不再是 /api/v1 权威来源(9.4 CLI 收口删)。
+			srv.SetMasterKeyPath(masterKeyPath)
 			// 队列认领循环(Phase 7.2):--queue-work 开启后 server 自己消费任务(免手动 os queue work)。
 			if queueWork {
 				srv.SetQueueWork(time.Duration(queueIntervalSec) * time.Second)
@@ -53,9 +54,10 @@ func serverCmd() *cobra.Command {
 				feishu = "on (OS_FEISHU_WEBHOOK)"
 			}
 			fmt.Printf("os server listening on %s (github poll every %d min; ctrl-c to stop)\n", addr, pollMin)
+			// /api/v1 auth 状态读 DB(Phase 9.2):console_token_hash 非空 = 已初始化要求 Bearer;空 = 开放。
 			api := "open"
-			if srv.APITokenSet() {
-				api = "on (OS_API_TOKEN)"
+			if init, err := srv.Initialized(cmd.Context()); err == nil && init {
+				api = "on (console token)"
 			}
 			fmt.Printf("feishu notify: %s | daily digest: %s | /api/v1 auth: %s | queue work: %s\n", feishu, srv.DigestTime(), api, queueWorkStatus(srv))
 

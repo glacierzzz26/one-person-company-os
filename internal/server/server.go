@@ -15,6 +15,7 @@ import (
 	"github.com/glacierzzz26/one-person-company-os/internal/github"
 	osrepo "github.com/glacierzzz26/one-person-company-os/internal/repo"
 	"github.com/glacierzzz26/one-person-company-os/internal/service"
+	"github.com/glacierzzz26/one-person-company-os/internal/settings"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -36,13 +37,14 @@ type Server struct {
 	digestEnabled    bool
 	digestH, digestM int // 每日摘要时刻(HH:MM,本地时区)
 
-	apiToken string // /api/v1 bearer 校验(OS_API_TOKEN);空 = 开放
+	// masterKeyPath /setup 首启时主密钥落盘路径(<db>.key,0600)。CLI os server 注入;空 = /setup 500。
+	masterKeyPath string
 
 	queueInterval time.Duration // 队列认领循环间隔(0 = 关闭;--queue-work 开启)
 }
 
-// SetAPIToken 配置 /api/v1 访问令牌(空 = 不校验)。用于注入 OS_API_TOKEN(CLI)或测试直构。
-func (s *Server) SetAPIToken(tok string) { s.apiToken = tok }
+// SetMasterKeyPath 配置 /setup 主密钥落盘路径(<dbPath>.key)。CLI os server 在开库后注入。
+func (s *Server) SetMasterKeyPath(p string) { s.masterKeyPath = p }
 
 // SetQueueWork 开关队列认领循环:d > 0 = 开启(每 d 回收孤儿租约 + 认领执行直到排空,上限每 tick
 // queueBatchMax 条);0 = 关闭(驱动仍只走 CLI os queue work)。控制台建的任务可被 server 自动消费。
@@ -51,8 +53,15 @@ func (s *Server) SetQueueWork(d time.Duration) { s.queueInterval = d }
 // QueueWorkEnabled 队列循环是否开启(CLI 启动日志用)。
 func (s *Server) QueueWorkEnabled() bool { return s.queueInterval > 0 }
 
-// APITokenSet /api/v1 认证是否开启(日志/启动提示用,不泄漏 token)。
-func (s *Server) APITokenSet() bool { return s.apiToken != "" }
+// Initialized /setup 首启是否已完成(console_token_hash != ”;”=未初始化 /setup 开放)。
+// apiAuth 与 /setup 自守卫共用;读 DB 实时态(不缓存,避免初始化后需重启刷新)。
+func (s *Server) Initialized(ctx context.Context) (bool, error) {
+	h, err := s.svc.ConsoleTokenHash(ctx)
+	if err != nil {
+		return false, err
+	}
+	return h != "", nil
+}
 
 func New(svc *service.Service, pollMinutes int) *Server {
 	if pollMinutes <= 0 {
@@ -152,7 +161,11 @@ func (s *Server) Handler() http.Handler {
 	})
 	r.Post("/api/webhook/github", s.handleGitHubWebhook)
 	r.Route("/api/v1", func(r chi.Router) {
+		// chi 约束:middleware 必须先于本 mux 上的全部路由,故 Use 在前;/setup 免认证经 apiAuth 白名单
+		// (未初始化阶段无令牌可用;已初始化后 handler 自守卫 409,绝不覆盖既有密钥/令牌)。
 		r.Use(s.apiAuth)
+		r.Get("/setup/status", s.handleSetupStatus)
+		r.Post("/setup", s.handleSetup)
 		s.registerAPIRoutes(r)
 	})
 	// Phase 7.3 — Web 运营控制台(React SPA,go:embed 同源)。挂在最后:上面已注册的
@@ -161,11 +174,23 @@ func (s *Server) Handler() http.Handler {
 	return r
 }
 
-// apiAuth /api/v1 bearer 校验(Phase 7.1):配了 apiToken 时要求
-// `Authorization: Bearer <token>`(constant-time);未配 → 开放(单算子本地姿态,暴露到公网务必配)。
+// apiAuth /api/v1 bearer 校验(Phase 9.2 DB 哈希,契约 console-access.md §3.4):每次请求读全局
+// console_token_hash——” = 未初始化 → 开放(与旧空 OS_API_TOKEN 语义一致);非空 → 要求
+// `Authorization: Bearer <token>`,sha256hex(token) 与哈希 constant-time 比对。明文 token 不入库。
 func (s *Server) apiAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.apiToken == "" {
+		// /setup 首启引导免 bearer:未初始化阶段无令牌可用;已初始化后 POST /setup 在 handler 自守卫 409,
+		// setup/status 供 SPA 启动判定。二者都绝不泄漏/覆盖数据,白名单安全。
+		if r.URL.Path == "/api/v1/setup/status" || r.URL.Path == "/api/v1/setup" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		hash, err := s.svc.ConsoleTokenHash(r.Context())
+		if err != nil {
+			apiErr(w, http.StatusInternalServerError, "internal", err.Error())
+			return
+		}
+		if hash == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -173,7 +198,7 @@ func (s *Server) apiAuth(next http.Handler) http.Handler {
 		if h := r.Header.Get("Authorization"); len(h) > 7 && h[:7] == "Bearer " {
 			got = h[7:]
 		}
-		if got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(s.apiToken)) != 1 {
+		if got == "" || subtle.ConstantTimeCompare([]byte(settings.HashConsoleToken(got)), []byte(hash)) != 1 {
 			writeJSON(w, http.StatusUnauthorized, map[string]any{"ok": false, "error": map[string]string{"code": "unauthorized", "message": "invalid or missing bearer token"}})
 			return
 		}

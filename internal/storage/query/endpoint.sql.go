@@ -270,3 +270,35 @@ func (q *Queries) UpdateEndpointTier(ctx context.Context, arg UpdateEndpointTier
 	)
 	return i, err
 }
+
+const updateEndpointToken = `-- name: UpdateEndpointToken :one
+UPDATE endpoint SET token_enc = ?, updated_at = ? WHERE id = ? RETURNING id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, tier, status, models_cache, created_at, updated_at
+`
+
+type UpdateEndpointTokenParams struct {
+	TokenEnc  string `json:"token_enc"`
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) UpdateEndpointToken(ctx context.Context, arg UpdateEndpointTokenParams) (Endpoint, error) {
+	row := q.db.QueryRowContext(ctx, updateEndpointToken, arg.TokenEnc, arg.UpdatedAt, arg.ID)
+	var i Endpoint
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.Name,
+		&i.BaseUrl,
+		&i.TokenEnc,
+		&i.Proto,
+		&i.Vendor,
+		&i.SelectedModel,
+		&i.Role,
+		&i.Tier,
+		&i.Status,
+		&i.ModelsCache,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

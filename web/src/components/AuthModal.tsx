@@ -30,7 +30,7 @@ export default function AuthModal() {
 
   return (
     <Modal
-      title="OS_API_TOKEN · /api/v1 访问令牌"
+      title="控制台令牌 · /api/v1 访问令牌"
       open={authOpen}
       onCancel={closeAuth}
       footer={[
@@ -48,9 +48,9 @@ export default function AuthModal() {
       ]}
     >
       <Typography.Paragraph type="secondary" style={{ fontSize: 12.5 }}>
-        后端配了 <span className="mono">OS_API_TOKEN</span> 时,/api/v1 要求
-        <span className="mono"> Authorization: Bearer &lt;token&gt;</span>。此 token 仅存于本浏览器
-        localStorage,提交后整页重载生效。
+        已通过 <span className="mono">/setup</span> 首启后,/api/v1 要求
+        <span className="mono"> Authorization: Bearer &lt;token&gt;</span>(DB 只存哈希)。
+        此 token 仅存于本浏览器 localStorage,提交后整页重载生效;轮换请到「设置」页。
       </Typography.Paragraph>
       <Input.Password
         autoFocus

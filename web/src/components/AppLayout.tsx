@@ -12,6 +12,7 @@ import {
   MoonOutlined,
   ReloadOutlined,
   SafetyOutlined,
+  SettingOutlined,
   SunOutlined,
 } from '@ant-design/icons';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -55,7 +56,10 @@ const NAV = [
     key: 'infra',
     type: 'group',
     label: '基础设施',
-    children: [{ key: '/endpoints', label: '模型端点池', icon: <ApiOutlined /> }],
+    children: [
+      { key: '/endpoints', label: '模型端点池', icon: <ApiOutlined /> },
+      { key: '/settings', label: '设置', icon: <SettingOutlined /> },
+    ],
   } as never,
 ];
 
@@ -69,7 +73,7 @@ export default function AppLayout() {
     if (loc.pathname === '/') return '/';
     // 一级路径匹配(如 /approvals/xxx → /approvals 仍高亮)
     const first = `/${loc.pathname.split('/')[1] || ''}`;
-    const valid = ['/approvals', '/decisions', '/tasks', '/repos', '/memories', '/audit', '/endpoints'];
+    const valid = ['/approvals', '/decisions', '/tasks', '/repos', '/memories', '/audit', '/endpoints', '/settings'];
     return valid.includes(first) ? first : '/';
   }, [loc.pathname]);
 

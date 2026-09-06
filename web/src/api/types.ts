@@ -320,3 +320,26 @@ export interface DecideApprovalReq {
   decision: 'approve' | 'reject' | 'changes';
   note?: string;
 }
+
+// ===================== setup / console token(Phase 9.2)=====================
+export interface SetupStatus {
+  initialized: boolean; // console_token_hash != '' = 已首启
+}
+
+export interface SetupReq {
+  console_token: string; // ≥8 字符;服务端只存 sha256 哈希
+  old_endpoint_key?: string; // 可选:存量 enc:v1 端点的 OS_ENDPOINT_KEY,首启一次性 re-key
+}
+
+export interface SetupResult {
+  initialized: boolean;
+  master_key: string; // 仅此一次返回(服务端不落库可读通道);本地保存后即消失
+}
+
+export interface RotateConsoleTokenReq {
+  new_token: string;
+}
+
+export interface RotateConsoleTokenResult {
+  rotated: boolean;
+}

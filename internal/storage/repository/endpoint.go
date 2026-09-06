@@ -77,6 +77,17 @@ func (s *Store) SetEndpointTier(ctx context.Context, id, tier string) (endpoint.
 	return toEndpoint(row), nil
 }
 
+// SetEndpointToken 写回端点 token 密文(re-key / 主密钥换钥路径;raw cipher 直写,明文不出 repo)。
+func (s *Store) SetEndpointToken(ctx context.Context, id, cipher string) (endpoint.Endpoint, error) {
+	row, err := s.q.UpdateEndpointToken(ctx, query.UpdateEndpointTokenParams{
+		TokenEnc: cipher, UpdatedAt: time.Now().Unix(), ID: id,
+	})
+	if err != nil {
+		return endpoint.Endpoint{}, err
+	}
+	return toEndpoint(row), nil
+}
+
 func toEndpoint(r query.Endpoint) endpoint.Endpoint {
 	return endpoint.Endpoint{
 		ID: r.ID, CompanyID: r.CompanyID, Name: r.Name, BaseURL: r.BaseUrl,

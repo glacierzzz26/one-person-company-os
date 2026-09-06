@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
@@ -8,8 +9,10 @@ import (
 	"time"
 
 	"github.com/glacierzzz26/one-person-company-os/internal/config"
+	"github.com/glacierzzz26/one-person-company-os/internal/endpoint"
 	"github.com/glacierzzz26/one-person-company-os/internal/notify"
 	"github.com/glacierzzz26/one-person-company-os/internal/service"
+	"github.com/glacierzzz26/one-person-company-os/internal/settings"
 	"github.com/glacierzzz26/one-person-company-os/internal/storage"
 	"github.com/glacierzzz26/one-person-company-os/internal/storage/repository"
 	"github.com/spf13/cobra"
@@ -19,6 +22,10 @@ var (
 	cfgPath string
 	dbPath  string
 	svc     *service.Service
+
+	// masterKeyPath 当前开库的主密钥文件路径(<dbPath>.key,settings.KeyPath);PersistentPreRunE 解析后
+	// 供 os server 的 /setup 落盘用(server.New 无路径知识,经 SetMasterKeyPath 注入)。
+	masterKeyPath string
 )
 
 func NewRootCmd() *cobra.Command {
@@ -44,6 +51,14 @@ func NewRootCmd() *cobra.Command {
 			svc = service.New(repository.NewStore(db))
 			// 飞书通知(6.5):OS_FEISHU_WEBHOOK 为空 → NewFromEnv 返回 nil = 禁用(事件点即时 / server 摘要共用)。
 			svc.SetNotifier(notify.NewFromEnv())
+			// 主密钥注入(Phase 9.2):开库后若有 <db>.key(首启 /setup 生成)→ LoadKey 解码 → endpoint 进程级
+			// holder(os queue work / 委派 live 解端点 token 用)。无 key 文件 = 未初始化/env seam,静默跳过。
+			masterKeyPath = settings.KeyPath(path)
+			if k, err := settings.LoadKey(masterKeyPath); err == nil {
+				if kb, derr := hex.DecodeString(strings.TrimSpace(k)); derr == nil && len(kb) == 32 {
+					endpoint.UseMasterKey(kb)
+				}
+			}
 			return nil
 		},
 	}

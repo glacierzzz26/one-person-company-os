@@ -243,12 +243,17 @@ func TestAPIDecideApproval(t *testing.T) {
 	}
 }
 
-// TestAPIAuthToken bearer 中间件:配 token 后无头 401 / 带头 200;healthz 不受影响。
+// TestAPIAuthToken bearer 中间件(Phase 9.2 DB 哈希路径):/setup 初始化后 DB 存哈希;
+// 无头/错 token 401、正确 token 200、healthz 不受影响。
 func TestAPIAuthToken(t *testing.T) {
-	srv, _ := newTestServer(t)
-	srv.SetAPIToken("sekret-token")
+	srv, _ := newSetupServer(t)
+	h := srv.Handler()
 
-	rec, _ := doAPI(t, srv.Handler(), http.MethodGet, "/api/v1/companies", "")
+	if rec, env := doAPI(t, h, http.MethodPost, "/api/v1/setup", `{"console_token":"sekret-token"}`); rec.Code != http.StatusOK || !env.OK {
+		t.Fatalf("setup: code=%d env=%+v", rec.Code, env)
+	}
+
+	rec, _ := doAPI(t, h, http.MethodGet, "/api/v1/companies", "")
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("no token: code=%d, want 401", rec.Code)
 	}
@@ -256,13 +261,21 @@ func TestAPIAuthToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/companies", nil)
 	req.Header.Set("Authorization", "Bearer sekret-token")
 	rec2 := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec2, req)
+	h.ServeHTTP(rec2, req)
 	if rec2.Code != http.StatusOK {
 		t.Errorf("with token: code=%d, want 200 (body=%s)", rec2.Code, rec2.Body.String())
 	}
 
+	req3 := httptest.NewRequest(http.MethodGet, "/api/v1/companies", nil)
+	req3.Header.Set("Authorization", "Bearer sekret-tokeX") // 改一个字符 → 哈希不匹配 → 401
+	rec3b := httptest.NewRecorder()
+	h.ServeHTTP(rec3b, req3)
+	if rec3b.Code != http.StatusUnauthorized {
+		t.Errorf("mutated token: code=%d, want 401", rec3b.Code)
+	}
+
 	// healthz 不在 /api/v1 组,免认证。
-	rec3, _ := doAPI(t, srv.Handler(), http.MethodGet, "/healthz", "")
+	rec3, _ := doAPI(t, h, http.MethodGet, "/healthz", "")
 	if rec3.Code != http.StatusOK {
 		t.Errorf("healthz: code=%d, want 200", rec3.Code)
 	}

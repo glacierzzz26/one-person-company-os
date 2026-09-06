@@ -104,6 +104,9 @@ func (s *Server) registerAPIRoutes(r chi.Router) {
 	r.Get("/companies/{id}/repos", s.apiListRepos)
 	r.Post("/companies/{id}/repos", s.apiAddRepo)
 	r.Post("/companies/{id}/intake/sync", s.apiIntakeSync)
+
+	// 设置(Phase 9.2):控制台令牌轮换(Bearer 鉴权后;旧令牌即失效)。
+	r.Put("/settings/console-token", s.handleRotateConsoleToken)
 }
 
 // ---- 公司 / 组织 ----

@@ -55,10 +55,10 @@ export async function request<T>(path: string, init: { method?: string; body?: u
     throw new ApiError(0, 'network', `无法连接 os server(${path})——确认后端已起:os server --port 8787`);
   }
 
-  // 401 → 弹 token 输入框(配了 OS_API_TOKEN 的后端;空后端不会 401)
+  // 401 → 弹 token 输入框(/setup 初始化后的后端;未初始化后端不会 401)
   if (res.status === 401) {
     unauthorizedHandler?.();
-    throw new ApiError(401, 'unauthorized', '未授权:请填写 OS_API_TOKEN(401)');
+    throw new ApiError(401, 'unauthorized', '未授权:请填写控制台令牌(401)');
   }
 
   let payload: Envelope<T> | null = null;

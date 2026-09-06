@@ -20,3 +20,6 @@ UPDATE endpoint SET tier = ?, updated_at = ? WHERE id = ? RETURNING *;
 
 -- name: UpdateEndpointStatus :one
 UPDATE endpoint SET status = ?, updated_at = ? WHERE id = ? RETURNING *;
+
+-- name: UpdateEndpointToken :one
+UPDATE endpoint SET token_enc = ?, updated_at = ? WHERE id = ? RETURNING *;
