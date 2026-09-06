@@ -91,6 +91,29 @@ func seedEngineChildTask(t *testing.T, svc *Service, compID, ws string, reviewer
 
 func epRef(s string) *string { return &s }
 
+// seedJudgeDefaults 给公司配齐 8.4 判读槽默认档端点:review=frontier+openai、test=standard+openai
+// (writer=cheap+anthropic 缺省 → 留空 = claude 自带,合法)。baseURL 用不可达假地址即可 —— 纯 writer 路径
+// 用例(不发起 test/review 判读请求)只需端点行在,让 engineering 建单默认解析落槽,不触网。
+func seedJudgeDefaults(t *testing.T, st *repository.Store, compID string) (reviewerEP, testEP endpoint.Endpoint) {
+	t.Helper()
+	now := time.Now().Unix()
+	mk := func(name, tier string) endpoint.Endpoint {
+		ep, err := st.CreateEndpoint(context.Background(), endpoint.Endpoint{
+			ID: uuid.NewString(), CompanyID: compID, Name: name,
+			BaseURL: "http://127.0.0.1:1", Proto: "openai", Vendor: "gateway",
+			Tier: tier, SelectedModel: "judge-model", Role: "pool", Status: "active",
+			CreatedAt: now, UpdatedAt: now,
+		})
+		if err != nil {
+			t.Fatalf("seed judge endpoint %s: %v", tier, err)
+		}
+		return ep
+	}
+	reviewerEP = mk("judge-frontier", "frontier")
+	testEP = mk("judge-standard", "standard")
+	return reviewerEP, testEP
+}
+
 // seedEndpoint 落一条端点(proto=openai 判读网关;带 Bearer token 加密落库)。
 func seedEndpoint(t *testing.T, st *repository.Store, compID, baseURL string) endpoint.Endpoint {
 	t.Helper()
@@ -511,6 +534,8 @@ func TestDelegateWriterEmptyDiff(t *testing.T) {
 	compID := seedCompanyID(t, st)
 	ws := seedGitWorkspace(t)
 	svc.delegator = &writingDelegator{} // 不写文件
+	// 8.4:judging 槽全空 → 建单默认解析判读档;纯 writer 路径不触网,seedJudgeDefaults 即够。
+	seedJudgeDefaults(t, st, compID)
 	tk := seedEngineChildTask(t, svc, compID, ws, nil)
 	if _, err := svc.delegateWriter(ctx, tk, engCallCtx{role: engRoleWriter, round: 0}); err == nil ||
 		!strings.Contains(err.Error(), "no workspace changes") {
@@ -563,6 +588,8 @@ func TestAgentCLIFamilySelection(t *testing.T) {
 	ws := seedGitWorkspace(t)
 	fake := &writingDelegator{writeRel: "fix.txt"}
 	svc.delegator = fake
+	// 8.4:判读档端点补全(纯 writer/族选型路径不触网)。
+	seedJudgeDefaults(t, st, compID)
 	tk := seedEngineChildTask(t, svc, compID, ws, nil)
 
 	if got := agentCLIFromEnv(); got != agentCLIClaude {
@@ -673,6 +700,8 @@ func TestDelegateCommitKilledResidueRecovery(t *testing.T) {
 	ws := seedGitWorkspace(t)
 	fake := &writingDelegator{writeRel: "fix.txt"}
 	svc.delegator = fake
+	// 8.4:判读档端点补全(续跑 recovery 只走 writer 委派,不触网判读)。
+	seedJudgeDefaults(t, st, compID)
 	tk := seedEngineChildTask(t, svc, compID, ws, nil)
 
 	// 模拟「委派已发生、OS commit 前被杀」:baseline 已钉、残留已落盘、eng_delegate 审计已记(未 commit)。

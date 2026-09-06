@@ -82,6 +82,7 @@ type Endpoint struct {
 	Vendor        string `json:"vendor"`
 	SelectedModel string `json:"selected_model"`
 	Role          string `json:"role"`
+	Tier          string `json:"tier"`
 	Status        string `json:"status"`
 	ModelsCache   string `json:"models_cache"`
 	CreatedAt     int64  `json:"created_at"`
@@ -180,6 +181,7 @@ type Task struct {
 	ConflictCount      int64          `json:"conflict_count"`
 	WriterEndpointID   sql.NullString `json:"writer_endpoint_id"`
 	ReviewerEndpointID sql.NullString `json:"reviewer_endpoint_id"`
+	TestEndpointID     sql.NullString `json:"test_endpoint_id"`
 	CreatedAt          int64          `json:"created_at"`
 	UpdatedAt          int64          `json:"updated_at"`
 }

@@ -25,6 +25,7 @@ func (s *Store) CreateTask(ctx context.Context, t task.Task) (task.Task, error) 
 		ConflictCount:      t.ConflictCount,
 		WriterEndpointID:   ptrToNull(t.WriterEndpointID),
 		ReviewerEndpointID: ptrToNull(t.ReviewerEndpointID),
+		TestEndpointID:     ptrToNull(t.TestEndpointID),
 		CreatedAt:          t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	})
 	if err != nil {
@@ -216,7 +217,8 @@ func toTask(r query.Task) task.Task {
 		ConflictCount:      r.ConflictCount,
 		WriterEndpointID:   nullToPtr(r.WriterEndpointID),
 		ReviewerEndpointID: nullToPtr(r.ReviewerEndpointID),
-		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		TestEndpointID:     nullToPtr(r.TestEndpointID),
+		CreatedAt:          r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }
 

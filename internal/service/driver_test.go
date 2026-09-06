@@ -74,6 +74,8 @@ func TestDelegateBaselineFailsViaExecute(t *testing.T) {
 			ctx := context.Background()
 			compID := seedCompanyID(t, st)
 			ws := tc.setup(t)
+			// 8.4:判读档端点补全(writer 前置失败用例,失败点在委派门,到不了判读网关;端点行仅为建单默认解析)。
+			seedJudgeDefaults(t, st, compID)
 			tk := seedEngineChildTask(t, svc, compID, ws, nil)
 			if err := svc.ExecuteTask(ctx, "w1", tk.ID); err != nil {
 				t.Fatalf("ExecuteTask: %v", err)
@@ -101,9 +103,11 @@ func TestDelegateBaselineCleanPassesToWriter(t *testing.T) {
 	ws := seedGitWorkspace(t)
 	fake := &writingDelegator{writeRel: "fix.txt"}
 	svc.delegator = fake
+	// 8.4:判读档端点补全(只证 clean 前置放行委派,writer 委派后即止,不触网判读)。
+	seedJudgeDefaults(t, st, compID)
 	tk := seedEngineChildTask(t, svc, compID, ws, nil)
 
-	// 无 reviewer 端点,走到 writer 即因缺 test/review 端点 fail —— 这证明已越过 writer 委派前置。
+	// 走到 writer 即因缺 test/review 端点 fail —— 这证明已越过 writer 委派前置。
 	// (完整一轮在 TestDelegateWriterRoundLoopGateway 已覆盖;这里只证明 clean 前置放行委派)
 	if err := svc.delegateBaseline(ctx, tk); err != nil {
 		t.Fatalf("clean workspace should pass baseline, got %v", err)

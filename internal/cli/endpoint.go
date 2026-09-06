@@ -54,10 +54,10 @@ func endpointListCmd() *cobra.Command {
 			rows := [][]string{}
 			for _, e := range list {
 				rows = append(rows, []string{
-					shortID(e.ID), e.Name, e.BaseURL, e.Vendor, e.Proto, e.Role, e.SelectedModel, e.Status, fmtTime(e.CreatedAt),
+					shortID(e.ID), e.Name, e.BaseURL, e.Vendor, e.Proto, e.Role, tierCN(e.Tier), e.SelectedModel, e.Status, fmtTime(e.CreatedAt),
 				})
 			}
-			printTable([]string{"ID", "NAME", "BASE_URL", "VENDOR", "PROTO", "ROLE", "MODEL", "STATUS", "WHEN"}, rows)
+			printTable([]string{"ID", "NAME", "BASE_URL", "VENDOR", "PROTO", "ROLE", "TIER", "MODEL", "STATUS", "WHEN"}, rows)
 			return nil
 		},
 	}
@@ -93,6 +93,7 @@ func endpointShowCmd() *cobra.Command {
 				{"VENDOR", e.Vendor},
 				{"MODEL", e.SelectedModel},
 				{"ROLE", e.Role},
+				{"TIER", tierCN(e.Tier)},
 				{"STATUS", e.Status},
 				{"MODELS_CACHE", cache},
 				{"WHEN", fmtTime(e.CreatedAt)},
@@ -126,21 +127,36 @@ func endpointModelsCmd() *cobra.Command {
 }
 
 func endpointSelectCmd() *cobra.Command {
-	var model, role string
+	var model, role, tier string
 	cmd := &cobra.Command{
 		Use:   "select <id>",
-		Short: "Select the endpoint model (optionally assign role: pool|planner|standby)",
+		Short: "Select the endpoint model (optionally assign role/tier: pool|planner|standby; frontier|standard|cheap)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			e, err := svc.SelectEndpointModel(cmd.Context(), args[0], model, role)
+			e, err := svc.SelectEndpointModel(cmd.Context(), args[0], model, role, tier)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("endpoint %s -> model %s (role %s)\n", e.Name, e.SelectedModel, e.Role)
+			fmt.Printf("endpoint %s -> model %s (role %s tier %s)\n", e.Name, e.SelectedModel, e.Role, tierCN(e.Tier))
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&model, "model", "", "model id to select")
 	cmd.Flags().StringVar(&role, "role", "", "role: pool|planner|standby")
+	cmd.Flags().StringVar(&tier, "tier", "", "tier: frontier|standard|cheap (UI 高智/均衡/经济)")
 	return cmd
+}
+
+// tierCN tier → 中文标注(方向 §十 1);未知/空档原样显示。
+func tierCN(t string) string {
+	switch t {
+	case "frontier":
+		return "高智"
+	case "standard":
+		return "均衡"
+	case "cheap":
+		return "经济"
+	default:
+		return t
+	}
 }

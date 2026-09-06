@@ -83,6 +83,7 @@ CREATE TABLE task (
     conflict_count INTEGER NOT NULL DEFAULT 0,
     writer_endpoint_id   TEXT REFERENCES endpoint(id),
     reviewer_endpoint_id TEXT REFERENCES endpoint(id),
+    test_endpoint_id     TEXT REFERENCES endpoint(id),  -- test 判读槽(8.4;默认 standard,与 review 分槽)
     created_at     INTEGER NOT NULL,
     updated_at     INTEGER NOT NULL
 );
@@ -168,6 +169,7 @@ CREATE TABLE endpoint (
     vendor         TEXT NOT NULL DEFAULT '',
     selected_model TEXT NOT NULL DEFAULT '',
     role           TEXT NOT NULL DEFAULT 'pool',
+    tier           TEXT NOT NULL DEFAULT 'standard',  -- frontier | standard | cheap(8.4 档位分层;与 role 正交)
     status         TEXT NOT NULL DEFAULT 'active',
     models_cache   TEXT NOT NULL DEFAULT '',
     created_at     INTEGER NOT NULL,

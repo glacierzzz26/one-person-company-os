@@ -19,11 +19,11 @@ func taskCmd() *cobra.Command {
 
 func taskCreateCmd() *cobra.Command {
 	var (
-		companyID, title, description, risk, toolName string
-		capabilityID, workflowID, agentID             string
-		parentTaskID, writerEndpoint, reviewerEndpoint string
-		workspace                                      string
-		maxAttempts, timeoutSec                        int64
+		companyID, title, description, risk, toolName                string
+		capabilityID, workflowID, agentID                            string
+		parentTaskID, writerEndpoint, reviewerEndpoint, testEndpoint string
+		workspace                                                    string
+		maxAttempts, timeoutSec                                      int64
 	)
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -60,6 +60,9 @@ func taskCreateCmd() *cobra.Command {
 			if reviewerEndpoint != "" {
 				p.ReviewerEndpointID = &reviewerEndpoint
 			}
+			if testEndpoint != "" {
+				p.TestEndpointID = &testEndpoint
+			}
 			t, err := svc.CreateTask(cmd.Context(), p)
 			if err != nil {
 				return err
@@ -80,8 +83,9 @@ func taskCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&workflowID, "workflow", "", "workflow id")
 	cmd.Flags().StringVar(&agentID, "agent", "", "agent id")
 	cmd.Flags().StringVar(&parentTaskID, "parent-task", "", "parent task id (planner 拆解子任务)")
-	cmd.Flags().StringVar(&writerEndpoint, "writer-endpoint", "", "writer model endpoint id (engineering)")
-	cmd.Flags().StringVar(&reviewerEndpoint, "reviewer-endpoint", "", "reviewer model endpoint id (engineering; 空回退 writer)")
+	cmd.Flags().StringVar(&writerEndpoint, "writer-endpoint", "", "writer model endpoint id (engineering; 空 = 默认 cheap+anthropic 解析或 claude 自带)")
+	cmd.Flags().StringVar(&reviewerEndpoint, "reviewer-endpoint", "", "reviewer model endpoint id (engineering; 空 = 默认 frontier 解析)")
+	cmd.Flags().StringVar(&testEndpoint, "test-endpoint", "", "test judge endpoint id (engineering, 8.4; 空 = 默认 standard 解析,再回退 reviewer)")
 	return cmd
 }
 
@@ -124,11 +128,11 @@ func taskShowCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Printf("ID:            %s\nTitle:         %s\nStatus:        %s\nQueueStatus:   %s\nRisk:          %s\nAttempt:       %d\nMaxAttempts:   %d\nTool:          %s\nCompany:       %s\nCapability:    %s\nWorkflow:      %s\nAgent:         %s\nWorkspace:     %s\nParentTask:    %s\nRound:         %d\nConflicts:     %d\nWriterEP:      %s\nReviewerEP:    %s\nDescription:   %s\nLastError:     %s\nCreated:       %s\n",
+			fmt.Printf("ID:            %s\nTitle:         %s\nStatus:        %s\nQueueStatus:   %s\nRisk:          %s\nAttempt:       %d\nMaxAttempts:   %d\nTool:          %s\nCompany:       %s\nCapability:    %s\nWorkflow:      %s\nAgent:         %s\nWorkspace:     %s\nParentTask:    %s\nRound:         %d\nConflicts:     %d\nWriterEP:      %s\nReviewerEP:    %s\nTestEP:        %s\nDescription:   %s\nLastError:     %s\nCreated:       %s\n",
 				t.ID, t.Title, t.Status, t.QStatus, t.Risk, t.Attempt, t.MaxAttempts,
 				t.ToolName, shortID(t.CompanyID), strOrDash(t.CapabilityID), strOrDash(t.WorkflowID),
 				strOrDash(t.AgentID), strOrDashEmpty(t.WorkspacePath), strOrDash(t.ParentTaskID),
-				t.RoundNo, t.ConflictCount, strOrDash(t.WriterEndpointID), strOrDash(t.ReviewerEndpointID),
+				t.RoundNo, t.ConflictCount, strOrDash(t.WriterEndpointID), strOrDash(t.ReviewerEndpointID), strOrDash(t.TestEndpointID),
 				firstLine(t.Description), strOrDashEmpty(t.LastError), fmtTime(t.CreatedAt))
 			if t.Status == "completed" && t.Result != "" {
 				fmt.Printf("Result:\n%s\n", t.Result)

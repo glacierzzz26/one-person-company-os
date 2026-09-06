@@ -85,3 +85,7 @@ export const dispositionLabel = (k: string): string => DISPOSITION_CN[k] ?? k;
 
 export const ENDPOINT_ROLE_CN: Record<string, string> = { pool: '通用池 pool', planner: '规划 planner', standby: '热备 standby' };
 export const endpointRoleLabel = (r: string): string => ENDPOINT_ROLE_CN[r] ?? r;
+
+// 档位(8.4,与 role 正交):方向 §十 1 frontier=高智 standard=均衡 cheap=经济
+export const ENDPOINT_TIER_CN: Record<string, string> = { frontier: '高智', standard: '均衡', cheap: '经济' };
+export const endpointTierLabel = (t: string): string => ENDPOINT_TIER_CN[t] ?? t;

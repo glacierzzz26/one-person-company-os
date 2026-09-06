@@ -323,11 +323,13 @@ export function EndpointSelectModelModal({
   const [busy, setBusy] = useState(false);
   const [model, setModel] = useState('');
   const [role, setRole] = useState<string | undefined>(undefined);
+  const [tier, setTier] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (endpoint) {
       setModel(endpoint.selected_model || '');
       setRole(undefined);
+      setTier(undefined);
     }
   }, [endpoint]);
 
@@ -342,8 +344,8 @@ export function EndpointSelectModelModal({
     }
     setBusy(true);
     try {
-      await selectEndpointModel(endpoint.id, m, role);
-      message.success(`${endpoint.name} → ${m}${role ? `(${role})` : ''}`);
+      await selectEndpointModel(endpoint.id, m, role, tier);
+      message.success(`${endpoint.name} → ${m}${role ? `(role ${role})` : ''}${tier ? `(tier ${tier})` : ''}`);
       onClose();
       onDone();
     } catch (e) {
@@ -388,6 +390,23 @@ export function EndpointSelectModelModal({
               { value: 'pool', label: 'pool · 通用池' },
               { value: 'planner', label: 'planner · 规划' },
               { value: 'standby', label: 'standby · 热备' },
+            ]}
+          />
+        </div>
+        <div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-2)', marginBottom: 5, fontWeight: 500 }}>
+            档位(可选:frontier|standard|cheap · 8.4,与角色正交)
+          </div>
+          <Select
+            style={{ width: '100%' }}
+            allowClear
+            placeholder="不改"
+            value={tier}
+            onChange={setTier}
+            options={[
+              { value: 'frontier', label: 'frontier · 高智' },
+              { value: 'standard', label: 'standard · 均衡' },
+              { value: 'cheap', label: 'cheap · 经济' },
             ]}
           />
         </div>

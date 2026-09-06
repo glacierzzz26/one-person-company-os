@@ -103,20 +103,21 @@ func (s *Service) createPlannedSubtask(ctx context.Context, t task.Task, st engS
 		maxAttempts = 2 // planner 自动驱动的子任务给 2 次尝试(单次抖动不整包失败)
 	}
 	return s.createTask(ctx, TaskParams{
-		CompanyID:      t.CompanyID,
-		CapabilityID:   capID,
-		WorkflowID:     t.WorkflowID,
-		AgentID:        agentID,
-		Title:          st.Title,
-		Description:    desc,
-		ToolName:       "engineering",
-		Risk:           t.Risk,
-		MaxAttempts:    maxAttempts,
-		TimeoutSec:     t.TimeoutSec,
-		Workspace:      t.WorkspacePath,
-		ParentTaskID:   &t.ID,
+		CompanyID:          t.CompanyID,
+		CapabilityID:       capID,
+		WorkflowID:         t.WorkflowID,
+		AgentID:            agentID,
+		Title:              st.Title,
+		Description:        desc,
+		ToolName:           "engineering",
+		Risk:               t.Risk,
+		MaxAttempts:        maxAttempts,
+		TimeoutSec:         t.TimeoutSec,
+		Workspace:          t.WorkspacePath,
+		ParentTaskID:       &t.ID,
 		WriterEndpointID:   t.WriterEndpointID,
 		ReviewerEndpointID: t.ReviewerEndpointID,
+		TestEndpointID:     t.TestEndpointID, // 8.4 分槽:子任务继承父的 test 槽(父建单已默认解析或显式给)
 	}, "planner")
 }
 

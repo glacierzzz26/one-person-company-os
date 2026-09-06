@@ -83,6 +83,7 @@ export interface Task {
   conflict_count: number;
   writer_endpoint_id: string | null;
   reviewer_endpoint_id: string | null;
+  test_endpoint_id: string | null; // test 判读槽(8.4 分槽;默认 standard 档)
   created_at: number;
   updated_at: number;
 }
@@ -190,6 +191,7 @@ export interface Endpoint {
   vendor: string;
   selected_model: string;
   role: string; // pool | planner | standby
+  tier: string; // frontier | standard | cheap(8.4 档位;与 role 正交)
   status: string; // active | disabled
   models_cache: string; // json:最近一次 /v1/models 原始返回(对象/数组,可空)
   created_at: number;
@@ -282,6 +284,7 @@ export interface CreateTaskReq {
   parent_task_id?: string;
   writer_endpoint_id?: string;
   reviewer_endpoint_id?: string;
+  test_endpoint_id?: string;
 }
 
 export interface CreateDecisionReq {

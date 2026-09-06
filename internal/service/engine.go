@@ -98,9 +98,12 @@ func (s *Service) modelCall(ctx context.Context, e endpoint.Endpoint, prompt str
 	return resp.Content, nil
 }
 
-// engEndpointFor 解析某阶段使用的端点:id 为空 → agent 默认(Phase 6 先单端点:
-// test/review 回退 writer 端点)。
+// engEndpointFor 解析某阶段使用的端点(8.4 起 test 分槽):test → test_endpoint_id → reviewer → writer;
+// review → reviewer → writer。显式端点永远覆盖默认;空 → agent 默认(既有语义,scripted 不查)。
 func (s *Service) engEndpointFor(t task.Task, role string) string {
+	if role == engRoleTest && t.TestEndpointID != nil && *t.TestEndpointID != "" {
+		return *t.TestEndpointID
+	}
 	switch role {
 	case engRoleTest, engRoleReview:
 		if t.ReviewerEndpointID != nil && *t.ReviewerEndpointID != "" {

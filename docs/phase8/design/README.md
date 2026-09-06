@@ -8,3 +8,4 @@
 | [provider-upgrade.md](provider-upgrade.md) | ✅ 定稿并已实施(Phase 8.1 实施契约;OpenAI 兼容网关单适配,含修订 A) | 2026-09-04 |
 | [agent-delegation-loop.md](agent-delegation-loop.md) | ✅ 定稿并已实施(Phase 8.2 实施契约;writer 委派 claude Code 闭环 + 判读回网关,含 §八 实施修订记录) | 2026-09-04 |
 | [delegation-and-judging.md](delegation-and-judging.md) | ✅ 定稿并已实施(Phase 8.3 实施契约;判读结构化 + agent CLI 工具族 + 委派边界/共享工作树仲裁 = OS 逐次委派自动 commit,含 §七 实施修订记录) | 2026-09-06 |
+| [tier-enforcement.md](tier-enforcement.md) | ✅ 定稿并已实施(Phase 8.4 实施契约;endpoint.tier(0010)+ task.test_endpoint_id(0011)+ 角色默认解析落建单 + CLI/控制台可见,含 §七 实施修订记录) | 2026-09-06 |

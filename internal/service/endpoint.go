@@ -96,32 +96,48 @@ func (s *Service) FetchEndpointModelsAs(ctx context.Context, id, actor string) (
 	return models, err
 }
 
-// SelectEndpointModel 选定模型(可选同时指派 role)。写操作落 Audit。
-func (s *Service) SelectEndpointModel(ctx context.Context, id, model, role string) (endpoint.Endpoint, error) {
-	return s.SelectEndpointModelAs(ctx, id, model, role, "human:cli")
+// SelectEndpointModel 选定模型(可选同时指派 role / tier)。写操作落 Audit。
+func (s *Service) SelectEndpointModel(ctx context.Context, id, model, role, tier string) (endpoint.Endpoint, error) {
+	return s.SelectEndpointModelAs(ctx, id, model, role, tier, "human:cli")
 }
 
 // SelectEndpointModelAs 同 SelectEndpointModel,审计 actor 用传入值(如 human:console)。
-func (s *Service) SelectEndpointModelAs(ctx context.Context, id, model, role, actor string) (endpoint.Endpoint, error) {
+func (s *Service) SelectEndpointModelAs(ctx context.Context, id, model, role, tier, actor string) (endpoint.Endpoint, error) {
 	if model == "" {
 		return endpoint.Endpoint{}, fmt.Errorf("--model is required")
 	}
-	e, err := s.store.SetEndpointModel(ctx, id, model, "")
-	if err != nil {
-		return endpoint.Endpoint{}, err
-	}
+	// 先校验 role/tier,再落库(避免 model 已更新而 role/tier 非法导致半写)。
 	if role != "" {
 		switch role {
 		case "pool", "planner", "standby":
 		default:
 			return endpoint.Endpoint{}, fmt.Errorf("--role must be pool|planner|standby (got %q)", role)
 		}
+	}
+	if tier != "" {
+		switch tier {
+		case tierFrontier, tierStandard, tierCheap:
+		default:
+			return endpoint.Endpoint{}, fmt.Errorf("--tier must be frontier|standard|cheap (got %q)", tier)
+		}
+	}
+	e, err := s.store.SetEndpointModel(ctx, id, model, "")
+	if err != nil {
+		return endpoint.Endpoint{}, err
+	}
+	if role != "" {
 		e, err = s.store.SetEndpointRole(ctx, id, role)
 		if err != nil {
 			return endpoint.Endpoint{}, err
 		}
 	}
-	_, err = s.audit(ctx, "endpoint", e.ID, "select", actor, model+" role="+e.Role)
+	if tier != "" {
+		e, err = s.store.SetEndpointTier(ctx, id, tier)
+		if err != nil {
+			return endpoint.Endpoint{}, err
+		}
+	}
+	_, err = s.audit(ctx, "endpoint", e.ID, "select", actor, model+" role="+e.Role+" tier="+e.Tier)
 	return e, err
 }
 

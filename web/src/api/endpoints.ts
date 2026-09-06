@@ -95,8 +95,11 @@ export const listEndpoints = (companyId: string) =>
 export const getEndpoint = (id: string) => request<Endpoint>(`/api/v1/endpoints/${id}`);
 export const addEndpoint = (body: AddEndpointReq) =>
   request<Endpoint>('/api/v1/endpoints', { method: 'POST', body });
-export const selectEndpointModel = (id: string, model: string, role?: string) =>
-  request<Endpoint>(`/api/v1/endpoints/${id}/select`, { method: 'POST', body: { model, role: role || undefined } });
+export const selectEndpointModel = (id: string, model: string, role?: string, tier?: string) =>
+  request<Endpoint>(`/api/v1/endpoints/${id}/select`, {
+    method: 'POST',
+    body: { model, role: role || undefined, tier: tier || undefined },
+  });
 export const fetchEndpointModels = (id: string) =>
   request<ModelInfo[]>(`/api/v1/endpoints/${id}/models`, { method: 'POST' });
 

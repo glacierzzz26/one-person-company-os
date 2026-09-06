@@ -231,6 +231,7 @@ type taskCreateReq struct {
 	ParentTaskID       string `json:"parent_task_id"`
 	WriterEndpointID   string `json:"writer_endpoint_id"`
 	ReviewerEndpointID string `json:"reviewer_endpoint_id"`
+	TestEndpointID     string `json:"test_endpoint_id"`
 }
 
 func (s *Server) apiCreateTask(w http.ResponseWriter, r *http.Request) {
@@ -248,6 +249,7 @@ func (s *Server) apiCreateTask(w http.ResponseWriter, r *http.Request) {
 		ToolName: req.ToolName, Risk: req.Risk, MaxAttempts: req.MaxAttempts, TimeoutSec: req.TimeoutSec,
 		Workspace: req.Workspace, ParentTaskID: strPtr(req.ParentTaskID),
 		WriterEndpointID: strPtr(req.WriterEndpointID), ReviewerEndpointID: strPtr(req.ReviewerEndpointID),
+		TestEndpointID: strPtr(req.TestEndpointID),
 	}, consoleActor)
 	if err != nil {
 		handleServiceErr(w, err)
@@ -445,11 +447,12 @@ func (s *Server) apiSelectEndpointModel(w http.ResponseWriter, r *http.Request) 
 	var req struct {
 		Model string `json:"model"`
 		Role  string `json:"role"`
+		Tier  string `json:"tier"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	e, err := s.svc.SelectEndpointModelAs(r.Context(), pathParam(r, "id"), req.Model, req.Role, consoleActor)
+	e, err := s.svc.SelectEndpointModelAs(r.Context(), pathParam(r, "id"), req.Model, req.Role, req.Tier, consoleActor)
 	if err != nil {
 		handleServiceErr(w, err)
 		return

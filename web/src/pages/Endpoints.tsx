@@ -10,7 +10,7 @@ import { useApp } from '../store/AppContext';
 import { useData } from '../hooks/useApi';
 import { PageHead, EmptyState } from '../components/common';
 import { EndpointCreateModal, EndpointSelectModelModal } from '../components/modals';
-import { endpointRoleLabel } from '../utils/dicts';
+import { endpointRoleLabel, endpointTierLabel } from '../utils/dicts';
 import { parseModelsCache } from '../utils/parseModelsCache';
 import { fmtT, short } from '../utils/time';
 
@@ -48,7 +48,7 @@ export default function Endpoints() {
     <div>
       <PageHead
         title="模型端点池"
-        sub="GET /api/v1/companies/{id}/endpoints · 池 pool / 规划 planner / 热备 standby"
+        sub="GET /api/v1/companies/{id}/endpoints · 档位 高智 frontier / 均衡 standard / 经济 cheap;role 池 pool / 规划 planner / 热备 standby"
         actions={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
             新增端点
@@ -86,6 +86,11 @@ export default function Endpoints() {
                   <div className="mono dim" style={{ fontSize: 11 }}>{short(e.id)} · vendor {e.vendor} · proto {e.proto}</div>
                 </div>
               ),
+            },
+            {
+              title: '档位',
+              width: 80,
+              render: (_, e) => <span className="pill pill-muted">{endpointTierLabel(e.tier)}</span>,
             },
             {
               title: 'Base URL',

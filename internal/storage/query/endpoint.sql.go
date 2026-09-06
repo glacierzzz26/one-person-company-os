@@ -10,9 +10,9 @@ import (
 )
 
 const createEndpoint = `-- name: CreateEndpoint :one
-INSERT INTO endpoint (id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, status, models_cache, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, status, models_cache, created_at, updated_at
+INSERT INTO endpoint (id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, tier, status, models_cache, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, tier, status, models_cache, created_at, updated_at
 `
 
 type CreateEndpointParams struct {
@@ -25,6 +25,7 @@ type CreateEndpointParams struct {
 	Vendor        string `json:"vendor"`
 	SelectedModel string `json:"selected_model"`
 	Role          string `json:"role"`
+	Tier          string `json:"tier"`
 	Status        string `json:"status"`
 	ModelsCache   string `json:"models_cache"`
 	CreatedAt     int64  `json:"created_at"`
@@ -42,6 +43,7 @@ func (q *Queries) CreateEndpoint(ctx context.Context, arg CreateEndpointParams) 
 		arg.Vendor,
 		arg.SelectedModel,
 		arg.Role,
+		arg.Tier,
 		arg.Status,
 		arg.ModelsCache,
 		arg.CreatedAt,
@@ -58,6 +60,7 @@ func (q *Queries) CreateEndpoint(ctx context.Context, arg CreateEndpointParams) 
 		&i.Vendor,
 		&i.SelectedModel,
 		&i.Role,
+		&i.Tier,
 		&i.Status,
 		&i.ModelsCache,
 		&i.CreatedAt,
@@ -67,7 +70,7 @@ func (q *Queries) CreateEndpoint(ctx context.Context, arg CreateEndpointParams) 
 }
 
 const getEndpoint = `-- name: GetEndpoint :one
-SELECT id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, status, models_cache, created_at, updated_at FROM endpoint WHERE id = ?
+SELECT id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, tier, status, models_cache, created_at, updated_at FROM endpoint WHERE id = ?
 `
 
 func (q *Queries) GetEndpoint(ctx context.Context, id string) (Endpoint, error) {
@@ -83,6 +86,7 @@ func (q *Queries) GetEndpoint(ctx context.Context, id string) (Endpoint, error) 
 		&i.Vendor,
 		&i.SelectedModel,
 		&i.Role,
+		&i.Tier,
 		&i.Status,
 		&i.ModelsCache,
 		&i.CreatedAt,
@@ -92,7 +96,7 @@ func (q *Queries) GetEndpoint(ctx context.Context, id string) (Endpoint, error) 
 }
 
 const listEndpoints = `-- name: ListEndpoints :many
-SELECT id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, status, models_cache, created_at, updated_at FROM endpoint WHERE company_id = ? ORDER BY created_at DESC
+SELECT id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, tier, status, models_cache, created_at, updated_at FROM endpoint WHERE company_id = ? ORDER BY created_at DESC
 `
 
 func (q *Queries) ListEndpoints(ctx context.Context, companyID string) ([]Endpoint, error) {
@@ -114,6 +118,7 @@ func (q *Queries) ListEndpoints(ctx context.Context, companyID string) ([]Endpoi
 			&i.Vendor,
 			&i.SelectedModel,
 			&i.Role,
+			&i.Tier,
 			&i.Status,
 			&i.ModelsCache,
 			&i.CreatedAt,
@@ -133,7 +138,7 @@ func (q *Queries) ListEndpoints(ctx context.Context, companyID string) ([]Endpoi
 }
 
 const updateEndpointModel = `-- name: UpdateEndpointModel :one
-UPDATE endpoint SET selected_model = ?, models_cache = ?, updated_at = ? WHERE id = ? RETURNING id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, status, models_cache, created_at, updated_at
+UPDATE endpoint SET selected_model = ?, models_cache = ?, updated_at = ? WHERE id = ? RETURNING id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, tier, status, models_cache, created_at, updated_at
 `
 
 type UpdateEndpointModelParams struct {
@@ -161,6 +166,7 @@ func (q *Queries) UpdateEndpointModel(ctx context.Context, arg UpdateEndpointMod
 		&i.Vendor,
 		&i.SelectedModel,
 		&i.Role,
+		&i.Tier,
 		&i.Status,
 		&i.ModelsCache,
 		&i.CreatedAt,
@@ -170,7 +176,7 @@ func (q *Queries) UpdateEndpointModel(ctx context.Context, arg UpdateEndpointMod
 }
 
 const updateEndpointRole = `-- name: UpdateEndpointRole :one
-UPDATE endpoint SET role = ?, updated_at = ? WHERE id = ? RETURNING id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, status, models_cache, created_at, updated_at
+UPDATE endpoint SET role = ?, updated_at = ? WHERE id = ? RETURNING id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, tier, status, models_cache, created_at, updated_at
 `
 
 type UpdateEndpointRoleParams struct {
@@ -192,6 +198,7 @@ func (q *Queries) UpdateEndpointRole(ctx context.Context, arg UpdateEndpointRole
 		&i.Vendor,
 		&i.SelectedModel,
 		&i.Role,
+		&i.Tier,
 		&i.Status,
 		&i.ModelsCache,
 		&i.CreatedAt,
@@ -201,7 +208,7 @@ func (q *Queries) UpdateEndpointRole(ctx context.Context, arg UpdateEndpointRole
 }
 
 const updateEndpointStatus = `-- name: UpdateEndpointStatus :one
-UPDATE endpoint SET status = ?, updated_at = ? WHERE id = ? RETURNING id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, status, models_cache, created_at, updated_at
+UPDATE endpoint SET status = ?, updated_at = ? WHERE id = ? RETURNING id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, tier, status, models_cache, created_at, updated_at
 `
 
 type UpdateEndpointStatusParams struct {
@@ -223,6 +230,39 @@ func (q *Queries) UpdateEndpointStatus(ctx context.Context, arg UpdateEndpointSt
 		&i.Vendor,
 		&i.SelectedModel,
 		&i.Role,
+		&i.Tier,
+		&i.Status,
+		&i.ModelsCache,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateEndpointTier = `-- name: UpdateEndpointTier :one
+UPDATE endpoint SET tier = ?, updated_at = ? WHERE id = ? RETURNING id, company_id, name, base_url, token_enc, proto, vendor, selected_model, role, tier, status, models_cache, created_at, updated_at
+`
+
+type UpdateEndpointTierParams struct {
+	Tier      string `json:"tier"`
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) UpdateEndpointTier(ctx context.Context, arg UpdateEndpointTierParams) (Endpoint, error) {
+	row := q.db.QueryRowContext(ctx, updateEndpointTier, arg.Tier, arg.UpdatedAt, arg.ID)
+	var i Endpoint
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.Name,
+		&i.BaseUrl,
+		&i.TokenEnc,
+		&i.Proto,
+		&i.Vendor,
+		&i.SelectedModel,
+		&i.Role,
+		&i.Tier,
 		&i.Status,
 		&i.ModelsCache,
 		&i.CreatedAt,
