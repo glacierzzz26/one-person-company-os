@@ -88,46 +88,52 @@ func (s *Service) runEngineering(ctx context.Context, workerID string, t task.Ta
 		}
 	}
 
+	// hint = 上一判读失败原因(test 失败摘要 / review 驳回理由),回喂下一 writer 委派简报(8.3 A3)。
+	hint := ""
 	for {
-		// writer 产出(每轮开头;test 免费返工在本轮内复用同一 writer 端点)
-		diff, err := s.runEngPhase(runCtx, workerID, t, engRoleWriter, round, conflict, humanOverride, 0,
-			engWriterPrompt(t, round, conflict))
+		// writer 产出(每轮开头;test 免费返工在本轮内复用同一 writer 端点)。live writer = 委派
+		// (prompt 参数弃用,简报由 delegateBrief 构造,见 delegate.go);scripted = engScripted。
+		diff, err := s.runEngPhase(runCtx, workerID, t, engRoleWriter, round, conflict, humanOverride, 0, hint, "")
 		if err != nil {
 			return s.engFail(ctx, t, "writer", runCtx, err)
 		}
 
-		// test:失败 → 免费返工(同轮重写,round_no 不变、conflict 不累计)
-		testOut, err := s.runEngPhase(runCtx, workerID, t, engRoleTest, round, conflict, humanOverride, 0,
-			engTestPrompt(t, round, diff))
+		// test:失败 → 免费返工(同轮重写,round_no 不变、conflict 不累计);失败摘要回喂下一 writer。
+		testOut, err := s.runEngPhase(runCtx, workerID, t, engRoleTest, round, conflict, humanOverride, 0, "", engTestPrompt(t, round, diff))
 		if err != nil {
 			return s.engFail(ctx, t, "test", runCtx, err)
 		}
 		freeRework := 0
-		for !parseTestPass(testOut) {
+		testPass, testSummary := parseTest(testOut)
+		for !testPass {
 			freeRework++
 			if freeRework > engMaxFreeRework {
+				why := testSummary
+				if why == "" {
+					why = firstLine(testOut)
+				}
 				return s.engFail(ctx, t, "test", runCtx,
-					fmt.Errorf("test failed after %d free reworks: %s", engMaxFreeRework, firstLine(testOut)))
+					fmt.Errorf("test failed after %d free reworks: %s", engMaxFreeRework, why))
 			}
-			diff, err = s.runEngPhase(runCtx, workerID, t, engRoleWriter, round, conflict, humanOverride, freeRework,
-				engWriterPrompt(t, round, conflict))
+			hint = testSummary // 回喂:上一版为何没过测试
+			diff, err = s.runEngPhase(runCtx, workerID, t, engRoleWriter, round, conflict, humanOverride, freeRework, hint, "")
 			if err != nil {
 				return s.engFail(ctx, t, "writer", runCtx, err)
 			}
-			testOut, err = s.runEngPhase(runCtx, workerID, t, engRoleTest, round, conflict, humanOverride, freeRework,
-				engTestPrompt(t, round, diff))
+			testOut, err = s.runEngPhase(runCtx, workerID, t, engRoleTest, round, conflict, humanOverride, freeRework, "", engTestPrompt(t, round, diff))
 			if err != nil {
 				return s.engFail(ctx, t, "test", runCtx, err)
 			}
+			testPass, testSummary = parseTest(testOut)
 		}
 
-		// review
-		reviewOut, err := s.runEngPhase(runCtx, workerID, t, engRoleReview, round, conflict, humanOverride, 0,
-			engReviewPrompt(t, round, conflict, humanOverride, diff))
+		// review(裁决 + 理由;理由回喂下一轮 writer)
+		reviewOut, err := s.runEngPhase(runCtx, workerID, t, engRoleReview, round, conflict, humanOverride, 0, "", engReviewPrompt(t, round, conflict, humanOverride, diff))
 		if err != nil {
 			return s.engFail(ctx, t, "review", runCtx, err)
 		}
-		switch parseReviewVerdict(reviewOut) {
+		verdict, reviewReason := parseReview(reviewOut)
+		switch verdict {
 		case "":
 			return s.engFail(ctx, t, "review", runCtx,
 				fmt.Errorf("cannot parse review verdict from output: %s", firstLine(reviewOut)))
@@ -155,9 +161,10 @@ func (s *Service) runEngineering(ctx context.Context, workerID string, t task.Ta
 			}
 			return s.requestApproval(ctx, t, fmt.Sprintf("engineering fuse: reviewer rejected %d times", conflict))
 		}
-		// 同任务返工:round 推进,下轮从新 writer 开始。
+		// 同任务返工:round 推进,下轮从新 writer 开始;把 reviewer 驳回理由喂给下一轮 writer。
 		round++
 		humanOverride = false
+		hint = reviewReason
 		if _, err := s.store.SetTaskRound(ctx, t.ID, round, conflict); err != nil {
 			return err
 		}
@@ -169,8 +176,9 @@ func (s *Service) runEngineering(ctx context.Context, workerID string, t task.Ta
 }
 
 // runEngPhase 跑一个工程阶段:创建一条 execution(结果=该阶段模型输出),成功/失败均落库。
+// hint = 上一判读失败原因(仅 writer 角色消费,经 engCallCtx 进 delegateBrief,8.3 A3)。
 func (s *Service) runEngPhase(ctx context.Context, workerID string, t task.Task, role string,
-	round, conflict int64, humanOverride bool, retry int, prompt string) (string, error) {
+	round, conflict int64, humanOverride bool, retry int, hint, prompt string) (string, error) {
 	execID := uuid.NewString()
 	now := time.Now().Unix()
 	if _, err := s.store.CreateExecution(ctx, execution.Execution{
@@ -181,7 +189,7 @@ func (s *Service) runEngPhase(ctx context.Context, workerID string, t task.Task,
 	}
 	out, err := s.engCall(ctx, t, engCallCtx{
 		role: role, round: round, conflict: conflict,
-		humanOverride: humanOverride, retry: retry, prompt: prompt,
+		humanOverride: humanOverride, retry: retry, hint: hint, prompt: prompt,
 	})
 	finishAt := time.Now().Unix()
 	if err != nil {
@@ -212,23 +220,17 @@ func (s *Service) engFail(ctx context.Context, t task.Task, phase string, runCtx
 	return err
 }
 
-// ---- prompt 构造 ----
+// ---- prompt 构造(8.3 A1:判读输出 = 结构化 JSON 信号,理由/失败摘要可捕获回喂) ----
 
-// 注意:prompt 内需含 ```diff``` 围栏提示,故用双引号拼接而非 raw string。
-func engWriterPrompt(t task.Task, round, conflict int64) string {
-	return fmt.Sprintf("You are the coding engineer (writer) for task %q.\n"+
-		"Description: %s\n"+
-		"Context: round=%d reviewer_conflicts=%d\n"+
-		"Produce ONLY a single fenced diff block (```diff ... ```) fixing the described problem.\n"+
-		"No prose, no explanations outside the fence.",
-		t.Title, strings.TrimSpace(t.Description), round, conflict)
-}
+// writer live = 委派(claude 等),简报由 delegateBrief 构造(delegate.go),此文件不再有 writer 文本 prompt。
 
 func engTestPrompt(t task.Task, round int64, diff string) string {
 	return fmt.Sprintf("You are QA. A writer produced this diff for task %q (round=%d).\n"+
 		"Diff:\n%s\n"+
 		"Judge whether the change is acceptable and would pass tests.\n"+
-		"Reply on a single line: \"TEST OK\" or \"TEST FAIL:<reason>\".",
+		"Reply with EXACTLY ONE JSON object, no prose, no code fence:\n"+
+		"  {\"pass\":true,\"summary\":\"<what you checked / conclusion>\"}  — acceptable\n"+
+		"  {\"pass\":false,\"summary\":\"<failure detail the writer must fix>\"} — not acceptable",
 		t.Title, round, diff)
 }
 
@@ -242,7 +244,9 @@ func engReviewPrompt(t task.Task, round, conflict int64, humanOverride bool, dif
 	}
 	return fmt.Sprintf("You are a senior reviewer. A writer produced this diff for task %q.%s\n"+
 		"Diff:\n%s\n"+
-		"Reply on a single line: \"VERDICT: approve\" or \"VERDICT: needs_changes:<reason>\".",
+		"Reply with EXACTLY ONE JSON object, no prose, no code fence:\n"+
+		"  {\"verdict\":\"approve\"}  — the diff resolves the task\n"+
+		"  {\"verdict\":\"needs_changes\",\"reason\":\"<specific concern the writer must address>\"}",
 		t.Title, note, diff)
 }
 

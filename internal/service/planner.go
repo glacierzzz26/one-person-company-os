@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -129,19 +128,7 @@ var planActionRe = regexp.MustCompile(`(?i)"action"\s*:\s*"(direct|split|ask)"|(
 // parsePlan 容错解析 planner JSON 输出:先去 ``` 围栏,JSON 解析优先;失败再用正则兜底。
 // 校验:split 无子任务/子任务缺标题 → 转 ask(不能凭空拆);超出 cap → ask。
 func parsePlan(out string) (engPlan, error) {
-	raw := strings.TrimSpace(out)
-	// 去掉可能的 ```json ... ``` 围栏
-	if i := strings.Index(raw, "```"); i >= 0 {
-		j := strings.Index(raw[i+3:], "```")
-		if j >= 0 {
-			raw = strings.TrimSpace(raw[i+3 : i+3+j])
-		}
-	}
-	raw = strings.Trim(raw, "` \t\r\n")
-	if raw == "" {
-		return engPlan{}, fmt.Errorf("empty planner output")
-	}
-
+	// JSON 主契约(8.3 统一解码 decodeJudgeJSON:容忍 ``` 围栏 / prose / 前后缀)。
 	var j struct {
 		Action   string `json:"action"`
 		Subtasks []struct {
@@ -150,7 +137,7 @@ func parsePlan(out string) (engPlan, error) {
 		} `json:"subtasks"`
 		Reason string `json:"reason"`
 	}
-	if err := json.Unmarshal([]byte(raw), &j); err == nil && j.Action != "" {
+	if decodeJudgeJSON(out, &j) && strings.TrimSpace(j.Action) != "" {
 		subs := make([]engSubtask, 0, len(j.Subtasks))
 		for _, x := range j.Subtasks {
 			subs = append(subs, engSubtask{Title: strings.TrimSpace(x.Title), Description: strings.TrimSpace(x.Description)})
@@ -159,7 +146,7 @@ func parsePlan(out string) (engPlan, error) {
 	}
 
 	// 正则兜底(仅 action 可判;split 无子任务规格 → 不能自动拆,转 ask)
-	m := planActionRe.FindStringSubmatch(raw)
+	m := planActionRe.FindStringSubmatch(strings.TrimSpace(out))
 	if m == nil {
 		return engPlan{}, fmt.Errorf("no ACTION found")
 	}

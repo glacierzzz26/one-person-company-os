@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/glacierzzz26/one-person-company-os/internal/endpoint"
@@ -12,8 +11,9 @@ import (
 	"github.com/glacierzzz26/one-person-company-os/internal/task"
 )
 
-// Engineering Driver 的执行/判读分界(Phase 6.2 + Phase 8.2 修订 B)。
-// 三阶段(写/测/审)各自一次执行/模型调用,输出走容错结构化解析(见下方 parse* 助手)。
+// Engineering Driver 的执行/判读分界(Phase 6.2 + Phase 8.2 修订 B + Phase 8.3 A)。
+// 三阶段(写/测/审)各自一次执行/模型调用;判读(test/review)输出 = 结构化 JSON 信号,
+// 解析在 judge.go(JSON 主契约 + 旧标记兜底)。
 //
 // 修订 B 后(2026-09-04):writer(需真动手的执行阶段)live = 委派集成 agent CLI(claude Code)
 // 在任务 git workspace 自主干,OS 用 git 捕获真实 diff(见 delegate.go delegateWriter);
@@ -38,6 +38,7 @@ type engCallCtx struct {
 	conflict      int64
 	humanOverride bool   // 熔断后人工 approve 续跑(提示 reviewer 重新决断)
 	retry         int    // 本轮内重试次数(test 免费返工)
+	hint          string // 上一判读失败原因(test 失败摘要 / review 驳回理由),喂下一 writer 简报(8.3 A3)
 	prompt        string // 阶段指令 + 上下文(由 driver 组)
 }
 
@@ -119,34 +120,35 @@ func engScripted(c engCallCtx) string {
 		return fmt.Sprintf("PATCH\n```diff\n@@ round=%d conflict=%d\n- before\n+ fix (writer deterministic, retry=%d)\n```\n",
 			c.round, c.conflict, c.retry)
 	case engRoleTest:
+		// 8.3 A2:scripted test/review 输出切结构化 JSON(与 parseTest/parseReview 主契约同构)。
 		switch os.Getenv("OS_SCRIPT_TEST") {
 		case "fail-all":
-			return "TEST FAIL: scripted permanent failure"
+			return `{"pass":false,"summary":"scripted permanent failure"}`
 		case "fail-once":
 			if c.retry == 0 {
-				return "TEST FAIL: scripted flake (first attempt)"
+				return `{"pass":false,"summary":"scripted flake (first attempt)"}`
 			}
-			return "TEST OK"
+			return `{"pass":true,"summary":"scripted pass after flake"}`
 		default:
-			return "TEST OK"
+			return `{"pass":true,"summary":"scripted pass"}`
 		}
 	case engRoleReview:
 		// 熔断后人工 approve 续跑:无条件放行,让任务确定性收敛。
 		if c.humanOverride {
-			return "VERDICT: approve (human approved after fuse)"
+			return `{"verdict":"approve","reason":"human approved after fuse"}`
 		}
 		v := strings.ToLower(strings.TrimSpace(os.Getenv("OS_SCRIPT_REVIEW")))
 		switch {
 		case v == "", v == "approve":
-			return "VERDICT: approve"
+			return `{"verdict":"approve"}`
 		case v == "reject":
-			return "VERDICT: needs_changes: scripted reviewer disagreement"
+			return `{"verdict":"needs_changes","reason":"scripted reviewer disagreement"}`
 		default:
 			// reject:N → conflict < N 时驳回,达到 N 后放行
 			if n := scriptedRejectN(v); n >= 0 && c.conflict < n {
-				return "VERDICT: needs_changes: scripted reviewer disagreement"
+				return `{"verdict":"needs_changes","reason":"scripted reviewer disagreement"}`
 			}
-			return "VERDICT: approve"
+			return `{"verdict":"approve"}`
 		}
 	}
 	return ""
@@ -163,55 +165,6 @@ func scriptedRejectN(v string) int64 {
 		return -1
 	}
 	return n
-}
-
-// ---- 容错结构化解析 ----
-
-var (
-	reviewVerdictRe = regexp.MustCompile(`(?i)VERDICT\s*[:=]\s*(approve|needs_changes|changes|reject|approved|rejected)\b`)
-	testOkRe        = regexp.MustCompile(`(?i)\bTEST\s+(OK|PASS(ED)?)\b`)
-	testFailRe      = regexp.MustCompile(`(?i)\bTEST\s+FAIL\b|(?i)\b(FAIL|ERROR|FAILED)\b`)
-)
-
-// parseReviewVerdict 从输出提取 approve / needs_changes;找不到 → ""。
-func parseReviewVerdict(out string) string {
-	m := reviewVerdictRe.FindStringSubmatch(out)
-	if m == nil {
-		return ""
-	}
-	switch strings.ToLower(m[1]) {
-	case "approve", "approved":
-		return "approve"
-	case "needs_changes", "changes", "reject", "rejected":
-		return "needs_changes"
-	}
-	return ""
-}
-
-// parseTestPass 判定测试是否通过:显式 TEST OK/PASS 或「无失败信号」→ 过;
-// 显式 TEST FAIL / FAIL / ERROR → 不过。
-func parseTestPass(out string) bool {
-	if testOkRe.MatchString(out) {
-		return true
-	}
-	if testFailRe.MatchString(out) {
-		return false
-	}
-	return true
-}
-
-// extractDiff 从 writer 输出提取 diff:优先取 ``` 围栏内正文;无围栏 → 整段原文。
-func extractDiff(out string) string {
-	if i := strings.Index(out, "```"); i >= 0 {
-		rest := out[i+3:]
-		rest = strings.TrimPrefix(rest, "diff\n")
-		rest = strings.TrimPrefix(rest, "diff\r\n")
-		if j := strings.Index(rest, "```"); j >= 0 {
-			return strings.TrimSpace(rest[:j])
-		}
-		return strings.TrimSpace(rest)
-	}
-	return strings.TrimSpace(out)
 }
 
 func short8(id string) string {

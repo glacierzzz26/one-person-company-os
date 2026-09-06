@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
@@ -286,11 +285,11 @@ func intakeMode() string {
 func triagePrompt(it github.Issue) string {
 	return fmt.Sprintf("You are the R&D intake triage for a one-person company.\n"+
 		"GitHub issue #%d:\nTitle: %s\nBody:\n%s\n\n"+
-		"Decide how the engineering team should take it in. Reply with EXACTLY ONE line:\n"+
-		"  DISPOSITION: direct_work    — well-scoped, start now as one engineering task\n"+
-		"  DISPOSITION: ask:<question> — need clarification, post one question\n"+
-		"  DISPOSITION: skip:<reason>  — duplicate / out of scope / not actionable\n"+
-		"  DISPOSITION: merge:<note>   — larger effort, planner should decompose it\n",
+		"Decide how the engineering team should take it in. Reply with EXACTLY ONE JSON object, no prose, no code fence:\n"+
+		"  {\"disposition\":\"direct_work\"}                    — well-scoped, start now as one engineering task\n"+
+		"  {\"disposition\":\"ask\",\"note\":\"<question>\"}      — need clarification, post one question\n"+
+		"  {\"disposition\":\"skip\",\"note\":\"<reason>\"}       — duplicate / out of scope / not actionable\n"+
+		"  {\"disposition\":\"merge\",\"note\":\"<note>\"}        — larger effort, planner should decompose it\n",
 		it.Number, it.Title, it.Body)
 }
 
@@ -312,17 +311,4 @@ func engScriptedTriage() (string, string) {
 	}
 }
 
-var dispositionRe = regexp.MustCompile(`(?i)DISPOSITION\s*[:=]\s*(direct_work|ask|skip|merge)(?:\s*[:：]\s*(.*))?`)
-
-// parseDisposition 从模型输出提取处置 + 附注;无匹配 → 处置空。
-func parseDisposition(out string) (string, string) {
-	m := dispositionRe.FindStringSubmatch(out)
-	if m == nil {
-		return "", ""
-	}
-	note := ""
-	if len(m) > 2 {
-		note = strings.TrimSpace(m[2])
-	}
-	return strings.ToLower(m[1]), note
-}
+// parseDisposition 已迁 internal/service/judge.go(8.3 A:JSON 主 + 旧标记兜底)。

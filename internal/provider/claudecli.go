@@ -14,6 +14,7 @@ import (
 // 8.1 起模型判读文本走自建网关的 OpenAI 兼容 Chat(Chatter / OpenAI 实现,见 openai.go);
 // 8.2(修订 B)起 claude Code 的 agent 委派 = 执行阶段主路径,由 service 层 claudeDelegator
 // 承担(同 claude 二进制 agent 模式 + 同 ANTHROPIC_* env 语义,见 internal/service/delegate.go)。
+// 8.3 起委派目标按工具族注册选型(OS_AGENT_CLI;claude 默认 + codex 槽位),族适配器同见 delegate.go。
 // 本类型仅 0-7 遗留 Generate 消费方保留,代码不动。
 //
 // ClaudeCLI 是真调 claude CLI 无头模式(claude -p)的 Provider(Phase 6.1)。
