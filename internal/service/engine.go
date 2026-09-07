@@ -44,7 +44,7 @@ type engCallCtx struct {
 
 // engCall 执行一次工程阶段调用(live):writer → 委派集成 agent(git 捕获真实 diff);
 // 其余判读角色 → 网关 text Chat。scripted → engScripted(确定性,writer 返回假 diff)。
-// 模式判定 9.3 起走 DB 生效(engineScripted,env 仅测试 seam)。
+// 模式判定 9.3 起走 DB 生效(engineScripted;9.4 起 env 仅测试 seam,产品恒关不读)。
 func (s *Service) engCall(ctx context.Context, t task.Task, c engCallCtx) (string, error) {
 	if s.engineScripted(ctx, t.CompanyID) {
 		return engScripted(c), nil
@@ -117,7 +117,8 @@ func (s *Service) engEndpointFor(t task.Task, role string) string {
 	return ""
 }
 
-// engScripted 是离线确定性 test double:按阶段/env 返回可解析的固定内容。
+// engScripted 是离线确定性 test double:按阶段/env(OS_SCRIPT_*,仅 scripted 分支可达)返回可解析的固定内容。
+// 9.4:scripted 唯一 env 入口 = engineScripted 的 OS_ENGINE_MODE(envSeam 门,产品恒关)→ 本桩产品不可达。
 func engScripted(c engCallCtx) string {
 	switch c.role {
 	case engRoleWriter:

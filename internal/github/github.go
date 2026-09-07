@@ -30,7 +30,8 @@ type Source interface {
 	ListOpenIssues(ctx context.Context, owner, repo string) ([]Issue, error)
 }
 
-// Client 是 GitHub REST 客户端。token 经 env OS_GITHUB_TOKEN 注入,不入库不入日志。
+// Client 是 GitHub REST 客户端。token 由调用方经 NewClient(token) 注入(service 按公司解
+// github_token 机密,9.3+ 不再读 env),不入库不入日志。
 type Client struct {
 	token string
 	http  *http.Client
@@ -73,11 +74,11 @@ func (c *Client) ListOpenIssues(ctx context.Context, owner, repo string) ([]Issu
 		return nil, fmt.Errorf("github %s/%s: HTTP %d: %s", owner, repo, resp.StatusCode, truncate(string(body), 300))
 	}
 	var raw []struct {
-		Number    int64           `json:"number"`
-		Title     string          `json:"title"`
-		Body      string          `json:"body"`
-		HTMLURL   string          `json:"html_url"`
-		Pull      json.RawMessage `json:"pull_request"`
+		Number  int64           `json:"number"`
+		Title   string          `json:"title"`
+		Body    string          `json:"body"`
+		HTMLURL string          `json:"html_url"`
+		Pull    json.RawMessage `json:"pull_request"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, fmt.Errorf("parse github issues: %w", err)

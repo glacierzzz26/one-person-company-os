@@ -45,7 +45,7 @@ type engSubtask struct {
 }
 
 // planCall 对一次整包工程请求作出拆解决策。返回 engPlan,action ∈ direct/split/ask。
-// 模式判定 9.3 起走 DB 生效(engineScripted,env 仅测试 seam)。
+// 模式判定 9.3 起走 DB 生效(engineScripted;9.4 起 env 仅测试 seam,产品恒关不读)。
 func (s *Service) planCall(ctx context.Context, t task.Task) (engPlan, error) {
 	if s.engineScripted(ctx, t.CompanyID) {
 		return engScriptedPlan(t), nil
@@ -77,7 +77,7 @@ func planPrompt(t task.Task) string {
 		t.Title, strings.TrimSpace(t.Description), engPlanCap, engPlanCap)
 }
 
-// engScriptedPlan 是离线确定性 planner:OS_SCRIPT_PLAN
+// engScriptedPlan 是离线确定性 planner:OS_SCRIPT_PLAN(仅 scripted 分支可达,9.4 起产品不可达,同 engScripted)
 // "" / direct(默认) | split[:N](默认 3,N>cap → ask) | ask[:reason]。
 func engScriptedPlan(t task.Task) engPlan {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("OS_SCRIPT_PLAN")))

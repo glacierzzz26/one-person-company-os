@@ -7,8 +7,8 @@ import (
 	"os"
 )
 
-// Fixture 是离线确定性 issue 源(OS_ISSUE_SOURCE=fixture + OS_FIXTURE_ISSUES=<json 路径>)。
-// 无真实 GitHub token / 无公网时,用本地 fixture 验证 轮询+intake sync 全链路;
+// Fixture 是离线确定性 issue 源(经 company issue_source=fixture + issue_fixture_path=<json 路径> 配置,
+// 9.3+ 不再读 env)。无真实 GitHub token / 无公网时,用本地 fixture 验证 轮询+intake sync 全链路;
 // 条目字段同 Issue,owner/name 与注册仓库 repo_url 解析结果一致才被路由。
 type Fixture struct {
 	issues []Issue

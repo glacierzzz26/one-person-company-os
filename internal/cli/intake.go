@@ -12,8 +12,8 @@ func intakeCmd() *cobra.Command {
 	return cmd
 }
 
-// intakeSyncCmd 单次手动同步(server 轮询内部亦走 SyncRepos;无真实 GitHub token 时
-// 用 OS_ISSUE_SOURCE=fixture + OS_FIXTURE_ISSUES 离线冒烟)。
+// intakeSyncCmd 单次手动同步(server 轮询内部亦走 SyncRepos)。issue 源走公司配置(Web/API 设
+// issue_source=github + github_token 机密,或 fixture + issue_fixture_path 离线冒烟);env 仅测试 seam。
 func intakeSyncCmd() *cobra.Command {
 	var companyID string
 	cmd := &cobra.Command{

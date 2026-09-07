@@ -70,7 +70,7 @@ func (s *Service) SyncRepos(ctx context.Context, companyID string) ([]IntakeResu
 		return nil, fmt.Errorf("no registered repos (add one: os repo add --company <id> --name <n> --repo-url <github url> --workspace <dir>)")
 	}
 
-	// 9.3:issue 源按公司解析(secret github_token / company issue_source+fixture 路径;env 仅测试 seam)。
+	// 9.3:issue 源按公司解析(secret github_token / company issue_source+fixture 路径;env 仅测试 seam,9.4 产品恒关)。
 	// 同公司仓库复用源(一次 OpenSecretCurrent,循环内 cache);单仓库解析失败不中断(记 errs 续跑)。
 	results := make([]IntakeResult, 0, len(repos))
 	srcByCompany := map[string]github.Source{}
@@ -218,7 +218,7 @@ func (s *Service) createIssueTask(ctx context.Context, r osrepo.Repo, it github.
 }
 
 // triageIssue 对单条 issue 做分诊,返回处置 + 附注。scripted → 确定性;live → 模型。
-// 模式判定 9.3 起走 DB 生效(engineScripted,env 仅测试 seam)。
+// 模式判定 9.3 起走 DB 生效(engineScripted;9.4 起 env 仅测试 seam,产品恒关不读)。
 func (s *Service) triageIssue(ctx context.Context, companyID string, it github.Issue) (disp, note string, err error) {
 	if s.engineScripted(ctx, companyID) {
 		disp, note = engScriptedTriage()
@@ -284,7 +284,7 @@ func triagePrompt(it github.Issue) string {
 		it.Number, it.Title, it.Body)
 }
 
-// engScriptedTriage 是离线确定性分诊:OS_SCRIPT_TRIAGE
+// engScriptedTriage 是离线确定性分诊:OS_SCRIPT_TRIAGE(仅 scripted 分支可达,9.4 起产品不可达,同 engScripted)
 // "" / direct_work(默认) | ask:<q> | skip:<reason> | merge:<note>。
 func engScriptedTriage() (string, string) {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("OS_SCRIPT_TRIAGE")))

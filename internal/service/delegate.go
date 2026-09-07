@@ -44,10 +44,13 @@ var agentCLIRegistry = map[string]Delegator{
 // knownAgentCLIs 列已知族(报错/提示用,确定性顺序)。
 const knownAgentCLIs = "claude, codex"
 
-// agentCLIFromEnv 解析委派工具族:OS_AGENT_CLI,缺省 claude。合法性留 delegatorFor 判。
+// agentCLIFromEnv 解析委派工具族(测试 seam 专用,9.4:envSeam 门 —— 产品恒关走缺省 claude;
+// 生产选型不走此函数,见 delegateWriter 的 s.agentCLI)。合法性留 delegatorFor 判。
 func agentCLIFromEnv() string {
-	if v := strings.TrimSpace(os.Getenv("OS_AGENT_CLI")); v != "" {
-		return strings.ToLower(v)
+	if envSeam {
+		if v := strings.TrimSpace(os.Getenv("OS_AGENT_CLI")); v != "" {
+			return strings.ToLower(v)
+		}
 	}
 	return agentCLIClaude
 }
@@ -265,7 +268,7 @@ func delegateCommitMsg(t task.Task, c engCallCtx, family string) string {
 // --- delegateWriter:engCall 的 live writer 分支 ---
 
 // delegateWriter 执行一次 writer 委派(live),返回任务自起点(ref)以来的净 diff 作阶段产出。
-// 流程(8.3 C1):git 前置 → ensureBaseline(钉任务起点)→ 选型委派(family=agentCLIFromEnv)→
+// 流程(8.3 C1):git 前置 → ensureBaseline(钉任务起点)→ 选型委派(family=s.agentCLI,DB 生效)→
 // captureNet(净 diff,空 → 既有「no workspace changes」报错)→ audit eng_delegate(带 family+ref,
 // 先行记录保证 commit 失败后重认领仍可放行)→ commitDelegation。每次委派成功后工作树归 clean。
 // 与旧 writer 文本路径同语义:输出继续被 test/review 判读消费(净 diff = 8.2 累积 diff 等价)。
@@ -279,7 +282,7 @@ func (s *Service) delegateWriter(ctx context.Context, t task.Task, c engCallCtx)
 	}
 	ref := wsBaselineRef(t.ID)
 
-	// 9.3:委派族走 DB 生效(company 覆盖 → global 默认 → claude);env OS_AGENT_CLI 仅测试 seam。
+	// 9.3:委派族走 DB 生效(company 覆盖 → global 默认 → claude);env OS_AGENT_CLI 仅测试 seam(9.4 产品恒关)。
 	family, err := s.agentCLI(ctx, t.CompanyID)
 	if err != nil {
 		return "", fmt.Errorf("resolve agent cli: %w", err)
@@ -325,7 +328,7 @@ func (s *Service) delegateWriter(ctx context.Context, t task.Task, c engCallCtx)
 //   - workspace 脏 但已有本任务的 eng_delegate 审计 → 放行:残留是任务自己先前 attempt/返工的
 //     产物,在同一工作树累积迭代(修订 B 非破坏语义),熔断续跑/requeue 不被自己的残留卡死。
 //
-// scripted 跳过(走 engScripted,不落委派)。9.3:判定走 DB 生效(engineScripted,env 仅测试 seam)。
+// scripted 跳过(走 engScripted,不落委派)。9.3:判定走 DB 生效(engineScripted;9.4 起 env 仅测试 seam,产品恒关)。
 func (s *Service) delegateBaseline(ctx context.Context, t task.Task) error {
 	if s.engineScripted(ctx, t.CompanyID) {
 		return nil

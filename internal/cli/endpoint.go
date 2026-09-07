@@ -33,7 +33,7 @@ func endpointAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&companyID, "company", "", "company id")
 	cmd.Flags().StringVar(&name, "name", "", "endpoint name")
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "base url (e.g. https://api.anthropic.com/v1)")
-	cmd.Flags().StringVar(&token, "token", "", "auth token (encrypted; needs OS_ENDPOINT_KEY)")
+	cmd.Flags().StringVar(&token, "token", "", "auth token (encrypted; needs master key: run /setup to create <db>.key)")
 	cmd.Flags().StringVar(&proto, "proto", "auto", "protocol: auto|anthropic|openai")
 	return cmd
 }

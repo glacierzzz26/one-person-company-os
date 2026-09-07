@@ -111,3 +111,31 @@ func TestUseMasterKeyHolder(t *testing.T) {
 		t.Fatal("SealToken with no master and no env: want error")
 	}
 }
+
+// F5(契约 cli-readonly.md §五 F5):9.4 产品语义 —— envSeam 关(产品恒关)时 OS_ENDPOINT_KEY 不再兜底。
+// 无主密钥 + env 已设 → SealToken/OpenToken 报「master key not loaded(<db>.key)」;错误不得泄 env 名。
+func TestF5EnvSeamOffIgnoresEndpointKeyEnv(t *testing.T) {
+	// suite 默认 seam ON(TestMain);本用例显式关到产品态,测后复位 true + 清 master(防污染同包 env 用例)。
+	SetEnvSeam(false)
+	t.Cleanup(func() { SetEnvSeam(true) })
+	t.Cleanup(func() { UseMasterKey(nil) })
+	t.Setenv("OS_ENDPOINT_KEY", "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+
+	for _, name := range []string{"SealToken", "OpenToken"} {
+		var err error
+		if name == "SealToken" {
+			_, err = SealToken("tok")
+		} else {
+			_, err = OpenToken("enc:v1:dummy")
+		}
+		if err == nil {
+			t.Fatalf("%s with env set & seam off: want error", name)
+		}
+		if !strings.Contains(err.Error(), "master key not loaded") {
+			t.Fatalf("%s err = %v; want master key not loaded (<db>.key)", name, err)
+		}
+		if strings.Contains(err.Error(), "OS_ENDPOINT_KEY") {
+			t.Fatalf("%s err = %v; must not reference OS_ENDPOINT_KEY env in product mode", name, err)
+		}
+	}
+}
