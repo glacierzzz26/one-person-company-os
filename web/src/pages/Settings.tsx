@@ -19,8 +19,9 @@ export default function Settings() {
   const rotate = async (v: { new_token: string }) => {
     setBusy(true);
     try {
-      await rotateConsoleToken({ new_token: v.new_token });
-      setToken(v.new_token); // 旧令牌已失效,当前会话无缝切到新令牌
+      const token = v.new_token.trim(); // 与后端 trim 后哈希语义对齐
+      await rotateConsoleToken({ new_token: token });
+      setToken(token); // 旧令牌已失效,当前会话无缝切到新令牌
       message.success('控制台令牌已轮换(旧令牌立即失效)');
     } catch (e) {
       message.error(e instanceof Error ? e.message : String(e));

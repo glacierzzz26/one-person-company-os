@@ -19,9 +19,15 @@ export default function SetupWizard({ onDone }: { onDone: () => void }) {
   const submit = async (v: SetupReq) => {
     setBusy(true);
     try {
-      const r = await runSetup({ console_token: v.console_token, old_endpoint_key: v.old_endpoint_key?.trim() || undefined });
-      setToken(v.console_token); // 后续壳内请求带 Bearer,避免 401
-      setResult({ token: v.console_token, masterKey: r.master_key });
+      const token = v.console_token.trim(); // 后端存的是 trim 后哈希,存储/发送须同值,否则全程 401
+      if (token.length < 8) {
+        message.error('控制台令牌至少 8 个字符(去除首尾空格后)');
+        setBusy(false);
+        return;
+      }
+      const r = await runSetup({ console_token: token, old_endpoint_key: v.old_endpoint_key?.trim() || undefined });
+      setToken(token); // 后续壳内请求带 Bearer,避免 401
+      setResult({ token, masterKey: r.master_key });
       setStep(2);
     } catch (e) {
       message.error(e instanceof Error ? e.message : String(e));
