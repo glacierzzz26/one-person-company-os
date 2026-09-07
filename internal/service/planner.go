@@ -45,8 +45,9 @@ type engSubtask struct {
 }
 
 // planCall 对一次整包工程请求作出拆解决策。返回 engPlan,action ∈ direct/split/ask。
+// 模式判定 9.3 起走 DB 生效(engineScripted,env 仅测试 seam)。
 func (s *Service) planCall(ctx context.Context, t task.Task) (engPlan, error) {
-	if strings.EqualFold(os.Getenv("OS_ENGINE_MODE"), "scripted") {
+	if s.engineScripted(ctx, t.CompanyID) {
 		return engScriptedPlan(t), nil
 	}
 	e, err := s.intakeEndpoint(ctx, t.CompanyID)

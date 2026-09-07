@@ -6,14 +6,12 @@ import (
 
 	"github.com/glacierzzz26/one-person-company-os/internal/audit"
 	"github.com/glacierzzz26/one-person-company-os/internal/company"
-	"github.com/glacierzzz26/one-person-company-os/internal/notify"
 	"github.com/glacierzzz26/one-person-company-os/internal/storage/repository"
 	"github.com/google/uuid"
 )
 
 type Service struct {
-	store  *repository.Store
-	notify *notify.Notifier // 可选:飞书通知(Phase 6.5);nil = 禁用
+	store *repository.Store
 	// delegator 执行委派工具(Phase 8.2 修订 B:writer live = 委派集成 agent CLI)。
 	// 默认 claudeDelegator;测试注入 fake(记录 spec、向 workspace 落文件、返回 canned report)。
 	delegator Delegator
@@ -23,11 +21,8 @@ func New(store *repository.Store) *Service {
 	return &Service{store: store, delegator: &claudeDelegator{}}
 }
 
-// SetNotifier 注入飞书通知器(env OS_FEISHU_WEBHOOK 为空时传入 nil = 禁用)。
-func (s *Service) SetNotifier(n *notify.Notifier) { s.notify = n }
-
-// NotifyEnabled 是否已配置通知。nil 安全。
-func (s *Service) NotifyEnabled() bool { return s.notify != nil && s.notify.Enabled() }
+// (9.3 起不再有进程级 notify 单例:通知按任务归属公司机密 feishu_webhook 解析,见 notifyCompany;
+// SetNotifier/NotifyEnabled 已删除,通知源不再读 env OS_FEISHU_*。)
 
 // audit 记录一次写操作。所有写操作经由 service 层,自动落 Audit。
 func (s *Service) audit(ctx context.Context, entityType, entityID, action, actor, detail string) (audit.Audit, error) {

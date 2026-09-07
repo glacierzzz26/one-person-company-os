@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/glacierzzz26/one-person-company-os/internal/endpoint"
 )
@@ -19,11 +17,8 @@ const (
 	tierCheap    = "cheap"
 )
 
-// isScriptedEngine 是否离线确定性模式(与 engCall 分界同源:scripted 永不落委派/网关,
-// 故默认解析与硬失败也只在 live 语义下生效,scripted 建 engineering 任务沿用现语义)。
-func isScriptedEngine() bool {
-	return strings.EqualFold(os.Getenv("OS_ENGINE_MODE"), "scripted")
-}
+// (9.3 起包函数 isScriptedEngine 删除,模式判定统一走 service.engineScripted(ctx, companyID),
+// env 仅测试 seam;此处档位默认解析只在 live 语义下生效,scripted 建 engineering 任务沿用现语义。)
 
 // applyEndpointDefaults 8.4 契约:engineering(live)建单把**空**角色槽按默认档确定性解析落位。
 // 显式给的槽不解析、不硬失败。返回最终三槽指针 + 默认命中明细(供 create audit detail)。

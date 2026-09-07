@@ -44,8 +44,9 @@ type engCallCtx struct {
 
 // engCall 执行一次工程阶段调用(live):writer → 委派集成 agent(git 捕获真实 diff);
 // 其余判读角色 → 网关 text Chat。scripted → engScripted(确定性,writer 返回假 diff)。
+// 模式判定 9.3 起走 DB 生效(engineScripted,env 仅测试 seam)。
 func (s *Service) engCall(ctx context.Context, t task.Task, c engCallCtx) (string, error) {
-	if strings.EqualFold(os.Getenv("OS_ENGINE_MODE"), "scripted") {
+	if s.engineScripted(ctx, t.CompanyID) {
 		return engScripted(c), nil
 	}
 	if c.role == engRoleWriter {

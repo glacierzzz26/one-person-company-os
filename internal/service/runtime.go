@@ -1,0 +1,110 @@
+package service
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/glacierzzz26/one-person-company-os/internal/github"
+)
+
+// 运行时旋钮 DB 化(Phase 9.3,契约 runtime-knobs-web.md §3.1)。
+// 11 个 env 旋钮(方向 config-governance.md §3.1)逐行收编:engine_mode / agent_cli / issue_source
+// (+github_token 机密)统一改走 company 覆盖 → global 默认 → 内置默认的生效解析,env 只作测试 seam
+// (D3:env OR company→global→default,测试保留 env 注入能力,生产走 DB)。调用点替换见契约 §三 3.1 表。
+
+// engineScripted 生效 engine 模式判定。D3 seam 优先:env==scripted(离线确定性测试线)→ true;
+// 否则 DB 生效值(EngineModeFor:company 覆盖 → global 默认 → 内置 live)。解析失败按 live(与既存
+// fail-closed 端点语义一致,不动调用点)。Web 只写 live(契约决策③),scripted 只可能来自 env/手工 DB。
+func (s *Service) engineScripted(ctx context.Context, companyID string) bool {
+	if strings.EqualFold(os.Getenv("OS_ENGINE_MODE"), "scripted") {
+		return true
+	}
+	m, err := s.EngineModeFor(ctx, companyID)
+	if err != nil {
+		return false
+	}
+	return m == "scripted"
+}
+
+// agentCLI 生效委派工具族。env seam(OS_AGENT_CLI,与 agentCLIFromEnv 同源)→ company 覆盖
+// → global 默认 → 内置 claude。合法性留 delegatorFor 判(报错文案见 delegate.go,不泄 env 名)。
+func (s *Service) agentCLI(ctx context.Context, companyID string) (string, error) {
+	if v := strings.TrimSpace(os.Getenv("OS_AGENT_CLI")); v != "" {
+		return strings.ToLower(v), nil
+	}
+	if cs, ok, err := s.CompanySetting(ctx, companyID); err != nil {
+		return "", err
+	} else if ok && cs.AgentCLI != nil && *cs.AgentCLI != "" {
+		return strings.ToLower(strings.TrimSpace(*cs.AgentCLI)), nil
+	}
+	app, err := s.AppSetting(ctx)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(app.AgentCLIDefault) == "" {
+		return agentCLIClaude, nil
+	}
+	return strings.ToLower(strings.TrimSpace(app.AgentCLIDefault)), nil
+}
+
+// issueSourceFor 按公司解析通道 B issue 源(契约 §3.1):company 覆盖 issue_source
+// (fixture | github,缺省 github)→ github = 需该公司 secret github_token(fail-closed);
+// fixture = 需 company 覆盖 issue_fixture_path。env seam:OS_ISSUE_SOURCE 非空 → 原 env 分支
+// (OS_FIXTURE_ISSUES / OS_GITHUB_TOKEN,离线冒烟语义不变,测试依赖)。
+func (s *Service) issueSourceFor(ctx context.Context, companyID string) (github.Source, error) {
+	if v := strings.TrimSpace(os.Getenv("OS_ISSUE_SOURCE")); v != "" {
+		return issueSourceFromEnv()
+	}
+	mode := "github"
+	path := ""
+	if cs, ok, err := s.CompanySetting(ctx, companyID); err != nil {
+		return nil, err
+	} else if ok {
+		if cs.IssueSource != nil && *cs.IssueSource != "" {
+			mode = strings.ToLower(strings.TrimSpace(*cs.IssueSource))
+		}
+		if cs.IssueFixturePath != nil {
+			path = strings.TrimSpace(*cs.IssueFixturePath)
+		}
+	}
+	switch mode {
+	case "fixture":
+		if path == "" {
+			return nil, fmt.Errorf("company %s: issue_source=fixture requires issue_fixture_path", short8(companyID))
+		}
+		return github.LoadFixture(path)
+	case "", "github":
+		tok, ok, err := s.OpenSecretCurrent(ctx, companyID, SecretGitHubToken)
+		if err != nil {
+			return nil, err
+		}
+		if !ok || tok == "" {
+			return nil, fmt.Errorf("company %s: no github_token secret set (add via Web settings /companies/%s/secrets/github_token)", short8(companyID), short8(companyID))
+		}
+		return github.NewClient(tok), nil
+	default:
+		return nil, fmt.Errorf("company %s: issue_source must be github|fixture (got %q)", short8(companyID), mode)
+	}
+}
+
+// issueSourceFromEnv 按 env 解析 issue 源(原 issueSource(),9.3 起仅测试 seam 调用)。
+func issueSourceFromEnv() (github.Source, error) {
+	switch mode := strings.ToLower(strings.TrimSpace(os.Getenv("OS_ISSUE_SOURCE"))); mode {
+	case "fixture":
+		p := os.Getenv("OS_FIXTURE_ISSUES")
+		if p == "" {
+			return nil, fmt.Errorf("OS_ISSUE_SOURCE=fixture requires OS_FIXTURE_ISSUES=<json path>")
+		}
+		return github.LoadFixture(p)
+	case "", "github":
+		tok := os.Getenv("OS_GITHUB_TOKEN")
+		if tok == "" {
+			return nil, fmt.Errorf("OS_GITHUB_TOKEN is required for GitHub issue sync (offline smoke: OS_ISSUE_SOURCE=fixture + OS_FIXTURE_ISSUES)")
+		}
+		return github.NewClient(tok), nil
+	default:
+		return nil, fmt.Errorf("OS_ISSUE_SOURCE must be github|fixture (got %q)", mode)
+	}
+}

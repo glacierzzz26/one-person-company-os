@@ -56,11 +56,8 @@ type intakeAsk struct {
 // SyncRepos 拉取仓库(companyID 空 = 全部公司)的 open issues 并分诊入库。
 // 单仓库失败不中断;返回部分结果 + 聚合错误(CLI 以此决定退出码)。
 func (s *Service) SyncRepos(ctx context.Context, companyID string) ([]IntakeResult, error) {
-	src, err := issueSource()
-	if err != nil {
-		return nil, err
-	}
 	var repos []osrepo.Repo
+	var err error
 	if companyID == "" {
 		repos, err = s.store.ListAllRepos(ctx)
 	} else {
@@ -73,9 +70,21 @@ func (s *Service) SyncRepos(ctx context.Context, companyID string) ([]IntakeResu
 		return nil, fmt.Errorf("no registered repos (add one: os repo add --company <id> --name <n> --repo-url <github url> --workspace <dir>)")
 	}
 
+	// 9.3:issue 源按公司解析(secret github_token / company issue_source+fixture 路径;env 仅测试 seam)。
+	// 同公司仓库复用源(一次 OpenSecretCurrent,循环内 cache);单仓库解析失败不中断(记 errs 续跑)。
 	results := make([]IntakeResult, 0, len(repos))
+	srcByCompany := map[string]github.Source{}
 	var errs []string
 	for _, r := range repos {
+		src, haveSrc := srcByCompany[r.CompanyID]
+		if !haveSrc {
+			src, err = s.issueSourceFor(ctx, r.CompanyID)
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("repo %s: %v", r.Name, err))
+				continue
+			}
+			srcByCompany[r.CompanyID] = src
+		}
 		owner, name, ok := github.ParseOwnerRepo(r.RepoURL)
 		if !ok {
 			errs = append(errs, fmt.Sprintf("repo %s: cannot parse owner/repo from %q (channel B needs a GitHub repo URL)", r.Name, r.RepoURL))
@@ -167,7 +176,7 @@ func (s *Service) IntakeIssues(ctx context.Context, r osrepo.Repo, issues []gith
 			errs = append(errs, fmt.Sprintf("#%d: ledger: %v", it.Number, err))
 			continue
 		}
-		_, _ = s.audit(ctx, "issue", r.ID, "triage", "intake:"+intakeMode(),
+		_, _ = s.audit(ctx, "issue", r.ID, "triage", "intake:"+s.intakeModeText(ctx, r.CompanyID),
 			fmt.Sprintf("#%d %q -> %s", it.Number, firstLine(it.Title), disp))
 	}
 	res.IssuesSeen = len(issues)
@@ -209,8 +218,9 @@ func (s *Service) createIssueTask(ctx context.Context, r osrepo.Repo, it github.
 }
 
 // triageIssue 对单条 issue 做分诊,返回处置 + 附注。scripted → 确定性;live → 模型。
+// 模式判定 9.3 起走 DB 生效(engineScripted,env 仅测试 seam)。
 func (s *Service) triageIssue(ctx context.Context, companyID string, it github.Issue) (disp, note string, err error) {
-	if strings.EqualFold(os.Getenv("OS_ENGINE_MODE"), "scripted") {
+	if s.engineScripted(ctx, companyID) {
 		disp, note = engScriptedTriage()
 		return disp, note, nil
 	}
@@ -253,28 +263,9 @@ func (s *Service) intakeEndpoint(ctx context.Context, companyID string) (endpoin
 	return endpoint.Endpoint{}, fmt.Errorf("company %s: no active model endpoint (add with 'os endpoint add', or OS_ENGINE_MODE=scripted for offline smoke)", short8(companyID))
 }
 
-// issueSource 按 OS_ISSUE_SOURCE 解析 issue 源(github 缺省 fail-closed;fixture 离线冒烟)。
-func issueSource() (github.Source, error) {
-	switch mode := strings.ToLower(strings.TrimSpace(os.Getenv("OS_ISSUE_SOURCE"))); mode {
-	case "fixture":
-		p := os.Getenv("OS_FIXTURE_ISSUES")
-		if p == "" {
-			return nil, fmt.Errorf("OS_ISSUE_SOURCE=fixture requires OS_FIXTURE_ISSUES=<json path>")
-		}
-		return github.LoadFixture(p)
-	case "", "github":
-		tok := os.Getenv("OS_GITHUB_TOKEN")
-		if tok == "" {
-			return nil, fmt.Errorf("OS_GITHUB_TOKEN is required for GitHub issue sync (offline smoke: OS_ISSUE_SOURCE=fixture + OS_FIXTURE_ISSUES)")
-		}
-		return github.NewClient(tok), nil
-	default:
-		return nil, fmt.Errorf("OS_ISSUE_SOURCE must be github|fixture (got %q)", mode)
-	}
-}
-
-func intakeMode() string {
-	if strings.EqualFold(os.Getenv("OS_ENGINE_MODE"), "scripted") {
+// intakeModeText 审计 actor 用文本(9.3:按公司生效模式;替代原无公司 intakeMode())。
+func (s *Service) intakeModeText(ctx context.Context, companyID string) string {
+	if s.engineScripted(ctx, companyID) {
 		return "scripted"
 	}
 	return "live"

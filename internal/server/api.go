@@ -107,6 +107,16 @@ func (s *Server) registerAPIRoutes(r chi.Router) {
 
 	// 设置(Phase 9.2):控制台令牌轮换(Bearer 鉴权后;旧令牌即失效)。
 	r.Put("/settings/console-token", s.handleRotateConsoleToken)
+	// 设置(Phase 9.3):全局生效行 / 换主密钥 / 公司覆盖 / 公司机密(契约 runtime-knobs-web.md §3.6)。
+	r.Get("/settings", s.handleGetGlobalSettings)
+	r.Put("/settings", s.handleUpdateGlobalSettings)
+	r.Post("/settings/rotate-master-key", s.handleRotateMasterKey)
+	r.Get("/companies/{id}/settings", s.handleGetCompanySettings)
+	r.Put("/companies/{id}/settings", s.handleUpdateCompanySettings)
+	r.Delete("/companies/{id}/settings", s.handleResetCompanySettings)
+	r.Get("/companies/{id}/secrets", s.handleListCompanySecrets)
+	r.Put("/companies/{id}/secrets/{secretID}", s.handleSetCompanySecret)
+	r.Delete("/companies/{id}/secrets/{secretID}", s.handleDeleteCompanySecret)
 }
 
 // ---- 公司 / 组织 ----

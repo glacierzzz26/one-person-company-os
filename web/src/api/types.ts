@@ -343,3 +343,58 @@ export interface RotateConsoleTokenReq {
 export interface RotateConsoleTokenResult {
   rotated: boolean;
 }
+
+// ===================== settings(Phase 9.3 配置治理,契约 runtime-knobs-web.md §3.6/§3.7)=====================
+// 与后端 settings 包 json tag 逐字对齐;console_token_hash 永不回传(只给 console_token_set 掩码)。
+
+export interface GlobalSettings {
+  engine_mode_default: string; // Web 恒 'live'(scripted 仅 CLI/env 测试 seam,Web/API 拒写)
+  agent_cli_default: 'claude' | 'codex';
+  digest_time: string; // '' = 关;否则 "HH:MM"
+  http_port: number;
+  poll_min: number;
+  queue_work: boolean;
+  queue_interval_sec: number;
+  console_token_set: boolean; // 掩码:console_token_hash 非空(初始化已设令牌)
+  updated_at: number;
+}
+
+// 全局部分更新体(字段缺省 = 不改该维度)。engine_mode_default 只读 live,**不进请求**。
+export interface UpdateGlobalSettingsReq {
+  agent_cli_default?: 'claude' | 'codex';
+  digest_time?: string; // '' / "off" = 关;否则 "HH:MM"
+  http_port?: number;
+  poll_min?: number;
+  queue_work?: boolean;
+  queue_interval_sec?: number;
+}
+
+// company 覆盖行:指针字段 null = 继承 global(无覆盖行 = 全 null)。与后端 CompanySetting 对齐。
+export interface CompanySettings {
+  company_id: string;
+  engine_mode: 'live' | 'scripted' | null; // 只读展示(Web 不写 engine_mode);null=继承
+  agent_cli: 'claude' | 'codex' | null;
+  issue_source: 'github' | 'fixture' | null;
+  issue_fixture_path: string | null;
+  updated_at: number;
+}
+
+// company 部分覆盖(显式空串 = 清该维度覆盖回退继承)。
+export interface UpdateCompanySettingsReq {
+  agent_cli?: string; // '' = 清覆盖
+  issue_source?: string; // '' = 清覆盖(默认 github);'github' | 'fixture'
+  issue_fixture_path?: string; // '' = 清
+}
+
+// 公司机密元数据(值明文永不出 API;只出 {id,set,updated_at})。
+export interface SecretMeta {
+  id: string; // github_token | feishu_webhook | feishu_secret(白名单,后端 KnownSecretIDs)
+  set: boolean;
+  updated_at: number;
+}
+
+export interface RotateMasterKeyResult {
+  master_key: string; // 新主密钥,仅此一次返回
+  endpoints_rekeyed: number;
+  secrets_rekeyed: number;
+}

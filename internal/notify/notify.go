@@ -2,12 +2,12 @@
 //
 // 只做一件事:把一段文本推给飞书自定义机器人。文本内容由调用方(service)按消息种类组装。
 //
-// sink 双形态(env 控制):
-//   - https://… / http://…  → POST 飞书机器人文本消息(OS_FEISHU_WEBHOOK)
+// sink 双形态(由调用方传入 webhook 决定):
+//   - https://… / http://…  → POST 飞书机器人文本消息
 //   - file:///abs/path      → 追加写入本地邮箱(离线 test-double,等价 OS_ISSUE_SOURCE=fixture
 //     的思路;真实飞书验收前用它与单测做确定性冒烟,不依赖外网)
 //
-// 安全:OS_FEISHU_SECRET 非空时按飞书自定义机器人「加签」规则附带 timestamp+sign,
+// 安全:secret 非空时按飞书自定义机器人「加签」规则附带 timestamp+sign,
 // 本包与调用方均不把 secret/webhook 入日志。
 package notify
 
@@ -33,22 +33,23 @@ const (
 	maxRespRead = 1 << 10
 )
 
-// Notifier 推送句柄。webhook 为空时 NewFromEnv 返回 nil,调用方按 nil 安全处理(=禁用)。
+// Notifier 推送句柄。webhook 为空时 New 返回 nil,调用方按 nil 安全处理(=禁用)。
 type Notifier struct {
 	webhook string // https://open.feishu.cn/…/hook/… 或 file:///abs/path(离线邮箱)
 	secret  string // 可选:自定义机器人加签密钥
 	httpc   *http.Client
 }
 
-// NewFromEnv 从环境构造:OS_FEISHU_WEBHOOK 为空 → nil(禁用);OS_FEISHU_SECRET 可选。
-func NewFromEnv() *Notifier {
-	wh := strings.TrimSpace(os.Getenv("OS_FEISHU_WEBHOOK"))
+// New 构造推送句柄(Phase 9.3,契约 runtime-knobs-web.md §3.3):webhook 空 → nil(禁用);
+// secret 可选(飞书加签)。通知源 = 公司机密(secret.feishu_webhook/feishu_secret),不再读 env。
+func New(webhook, secret string) *Notifier {
+	wh := strings.TrimSpace(webhook)
 	if wh == "" {
 		return nil
 	}
 	return &Notifier{
 		webhook: wh,
-		secret:  os.Getenv("OS_FEISHU_SECRET"),
+		secret:  secret,
 		httpc:   &http.Client{Timeout: webhookTimeout},
 	}
 }
@@ -146,7 +147,8 @@ func (n *Notifier) postFeishu(ctx context.Context, text string) error {
 }
 
 // feishuSign 按飞书自定义机器人「加签」规则:
-//   stringToSign = timestamp + "\n" + secret;sign = base64(HMAC-SHA256(secret, stringToSign))。
+//
+//	stringToSign = timestamp + "\n" + secret;sign = base64(HMAC-SHA256(secret, stringToSign))。
 func feishuSign(secret, timestamp string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(timestamp + "\n" + secret))

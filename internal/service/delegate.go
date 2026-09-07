@@ -279,7 +279,11 @@ func (s *Service) delegateWriter(ctx context.Context, t task.Task, c engCallCtx)
 	}
 	ref := wsBaselineRef(t.ID)
 
-	family := agentCLIFromEnv()
+	// 9.3:委派族走 DB 生效(company 覆盖 → global 默认 → claude);env OS_AGENT_CLI 仅测试 seam。
+	family, err := s.agentCLI(ctx, t.CompanyID)
+	if err != nil {
+		return "", fmt.Errorf("resolve agent cli: %w", err)
+	}
 	d, err := s.delegatorFor(family)
 	if err != nil {
 		return "", err
@@ -321,9 +325,9 @@ func (s *Service) delegateWriter(ctx context.Context, t task.Task, c engCallCtx)
 //   - workspace 脏 但已有本任务的 eng_delegate 审计 → 放行:残留是任务自己先前 attempt/返工的
 //     产物,在同一工作树累积迭代(修订 B 非破坏语义),熔断续跑/requeue 不被自己的残留卡死。
 //
-// scripted 跳过(走 engScripted,不落委派)。
+// scripted 跳过(走 engScripted,不落委派)。9.3:判定走 DB 生效(engineScripted,env 仅测试 seam)。
 func (s *Service) delegateBaseline(ctx context.Context, t task.Task) error {
-	if strings.EqualFold(os.Getenv("OS_ENGINE_MODE"), "scripted") {
+	if s.engineScripted(ctx, t.CompanyID) {
 		return nil
 	}
 	ws := t.WorkspacePath

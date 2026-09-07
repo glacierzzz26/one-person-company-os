@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/glacierzzz26/one-person-company-os/internal/notify"
 )
 
 // 昨日摘要(Phase 6.5,设计 §8「定时 | 每日摘要 9:00」)。
@@ -33,33 +35,57 @@ type digestStats struct {
 	LedgerSeen     int            // 窗口内已同步 issue 数(去重计数)
 }
 
-// SendDailyDigest 组装并推送昨日摘要。未配置通知器 → 记日志跳过(服务化通道的摘要仍可随 server 常驻启用)。
+// SendDailyDigest 推送昨日摘要。Phase 9.3(契约 §3.4,决策①):按公司 fan-out —— 每个配了
+// feishu_webhook 机密的公司各发一份**仅该公司数据**的独立日报;未配公司跳过记日志;单公司失败记日志
+// 不中断(尽量发完);无任何公司配 webhook → 跳过返回 nil(通知源不再读 env OS_FEISHU_*)。
 func (s *Service) SendDailyDigest(ctx context.Context) error {
-	now := time.Now()
-	st, err := s.gatherDigest(ctx, now.Add(-digestWindowHours*time.Hour).Unix(), now.Unix())
+	comps, err := s.store.ListCompanies(ctx)
 	if err != nil {
-		return fmt.Errorf("gather daily digest: %w", err)
+		return fmt.Errorf("daily digest: list companies: %w", err)
 	}
-	text := formatDigest(st)
-	if !s.NotifyEnabled() {
-		log.Printf("daily digest skipped: OS_FEISHU_WEBHOOK unset (no feishu notifications)")
-		return nil
+	now := time.Now()
+	start, end := now.Add(-digestWindowHours*time.Hour).Unix(), now.Unix()
+	reported := 0
+	for _, c := range comps {
+		webhook, ok, err := s.OpenSecretCurrent(ctx, c.ID, SecretFeishuWebhook)
+		if err != nil {
+			return fmt.Errorf("daily digest: read feishu webhook for %s: %w", short8(c.ID), err)
+		}
+		if !ok || webhook == "" {
+			log.Printf("daily digest: company %s has no feishu_webhook secret, skipped", short8(c.ID))
+			continue
+		}
+		st, err := s.gatherDigestFor(ctx, c.ID, start, end)
+		if err != nil {
+			log.Printf("daily digest: gather company %s: %v", short8(c.ID), err)
+			continue
+		}
+		sec, _, _ := s.OpenSecretCurrent(ctx, c.ID, SecretFeishuSecret)
+		if err := notify.New(webhook, sec).PostText(ctx, formatDigest(st)); err != nil {
+			log.Printf("daily digest: send company %s: %v", short8(c.ID), err)
+			continue
+		}
+		reported++
 	}
-	if err := s.notify.PostText(ctx, text); err != nil {
-		return fmt.Errorf("send daily digest: %w", err)
-	}
+	log.Printf("daily digest: sent to %d company/ies", reported)
 	return nil
 }
 
-// gatherDigest 聚合摘要计数:全公司任务/审批/决策/通道 B 账本,按 [start,end] 窗口过滤。
-func (s *Service) gatherDigest(ctx context.Context, start, end int64) (digestStats, error) {
-	st := digestStats{Ledger: map[string]int{}, Title: time.Now().Format("2006-01-02 15:04")}
+// gatherDigestFor 聚合**单公司**摘要计数(契约 §3.4):本公司任务/审批(approval 无 company 列,
+// 经本公司任务 id 集过滤)/决策/通道 B 账本,按 [start,end] 窗口过滤。
+func (s *Service) gatherDigestFor(ctx context.Context, companyID string, start, end int64) (digestStats, error) {
+	st := digestStats{
+		Ledger: map[string]int{}, Title: time.Now().Format("2006-01-02 15:04"),
+		Companies: 1, CompanyID: companyID, // 单公司日报:尾部提示 os overview --company <id>
+	}
 
-	tasks, err := s.store.ListTasks(ctx, "", "", "", 0)
+	tasks, err := s.store.ListTasks(ctx, companyID, "", "", 0)
 	if err != nil {
 		return st, err
 	}
+	taskSet := make(map[string]struct{}, len(tasks))
 	for _, t := range tasks {
+		taskSet[t.ID] = struct{}{}
 		if t.CreatedAt >= start && t.CreatedAt <= end {
 			st.Created++
 		}
@@ -84,6 +110,9 @@ func (s *Service) gatherDigest(ctx context.Context, start, end int64) (digestSta
 		return st, err
 	}
 	for _, a := range apps {
+		if _, in := taskSet[a.TaskID]; !in {
+			continue // 别家公司的审批不属本公司日报
+		}
 		if a.DecidedAt == nil || *a.DecidedAt < start || *a.DecidedAt > end {
 			continue
 		}
@@ -97,7 +126,7 @@ func (s *Service) gatherDigest(ctx context.Context, start, end int64) (digestSta
 		}
 	}
 
-	decs, err := s.store.ListDecisions(ctx, "", "")
+	decs, err := s.store.ListDecisions(ctx, companyID, "")
 	if err != nil {
 		return st, err
 	}
@@ -107,24 +136,14 @@ func (s *Service) gatherDigest(ctx context.Context, start, end int64) (digestSta
 		}
 	}
 
-	comps, err := s.store.ListCompanies(ctx)
+	iss, err := s.store.ListIssueSync(ctx, companyID)
 	if err != nil {
 		return st, err
 	}
-	st.Companies = len(comps)
-	if len(comps) == 1 {
-		st.CompanyID = comps[0].ID
-	}
-	for _, c := range comps {
-		iss, err := s.store.ListIssueSync(ctx, c.ID)
-		if err != nil {
-			return st, err
-		}
-		for _, is := range iss {
-			if is.CreatedAt >= start && is.CreatedAt <= end {
-				st.Ledger[is.Disposition]++
-				st.LedgerSeen++
-			}
+	for _, is := range iss {
+		if is.CreatedAt >= start && is.CreatedAt <= end {
+			st.Ledger[is.Disposition]++
+			st.LedgerSeen++
 		}
 	}
 	return st, nil

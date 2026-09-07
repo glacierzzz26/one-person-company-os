@@ -116,9 +116,8 @@ func TestNilNotifierDisabled(t *testing.T) {
 		t.Errorf("nil PostText: %v", err)
 	}
 
-	t.Setenv("OS_FEISHU_WEBHOOK", "")
-	t.Setenv("OS_FEISHU_SECRET", "")
-	if got := NewFromEnv(); got != nil {
-		t.Errorf("NewFromEnv with empty webhook = %+v, want nil", got)
+	// (9.3 决策②:通知不再读 env OS_FEISHU_*,NewFromEnv 删除;空 webhook 构造 = nil 同语义。)
+	if got := New("", ""); got != nil {
+		t.Errorf("New with empty webhook = %+v, want nil", got)
 	}
 }

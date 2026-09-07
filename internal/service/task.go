@@ -50,8 +50,9 @@ func (s *Service) createTask(ctx context.Context, p TaskParams, actor string) (t
 	}
 	// 8.4:engineering(live)建单按默认档解析空端点槽(reviewer=frontier/test=standard/writer=cheap)。
 	// 显式给的不解析;judging 槽解析不到 → 硬失败;writer 槽空 = 合法(不触发)。scripted 一律跳过(离线红线)。
+	// 模式判定 9.3 起走 DB 生效(engineScripted,env 仅测试 seam)。
 	defaultDetail := ""
-	if p.ToolName == "engineering" && !isScriptedEngine() {
+	if p.ToolName == "engineering" && !s.engineScripted(ctx, p.CompanyID) {
 		w, r, tt, detail, derr := s.applyEndpointDefaults(ctx, p.CompanyID, p.WriterEndpointID, p.ReviewerEndpointID, p.TestEndpointID)
 		if derr != nil {
 			return task.Task{}, derr

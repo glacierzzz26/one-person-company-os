@@ -81,7 +81,8 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, http.StatusInternalServerError, "internal", "persist master key: "+err.Error())
 		return
 	}
-	endpoint.UseMasterKey(newKey) // 进程内生效,免重启
+	endpoint.UseMasterKey(newKey) // 进程内生效,免重启(endpoint token)
+	settings.UseMasterKey(newKey) // 9.3:settings 机密(secret 表)同 holder,运行期读写即用
 	if err := s.svc.SetConsoleTokenAs(r.Context(), token, consoleActor); err != nil {
 		apiErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return

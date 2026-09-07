@@ -8,6 +8,7 @@ import type {
   Audit,
   Capability,
   Company,
+  CompanySettings,
   CreateCompanyReq,
   CreateDecisionReq,
   CreateMemoryReq,
@@ -16,6 +17,7 @@ import type {
   Decision,
   Endpoint,
   Execution,
+  GlobalSettings,
   IntakeResult,
   Memory,
   ModelInfo,
@@ -23,10 +25,14 @@ import type {
   Repo,
   RotateConsoleTokenReq,
   RotateConsoleTokenResult,
+  RotateMasterKeyResult,
+  SecretMeta,
   SetupReq,
   SetupResult,
   SetupStatus,
   Task,
+  UpdateCompanySettingsReq,
+  UpdateGlobalSettingsReq,
   Workflow,
 } from './types';
 
@@ -120,4 +126,30 @@ export const setupStatus = () => request<SetupStatus>('/api/v1/setup/status');
 export const runSetup = (body: SetupReq) => request<SetupResult>('/api/v1/setup', { method: 'POST', body });
 export const rotateConsoleToken = (body: RotateConsoleTokenReq) =>
   request<RotateConsoleTokenResult>('/api/v1/settings/console-token', { method: 'PUT', body });
+
+// ---- settings(Phase 9.3,契约 runtime-knobs-web.md §3.6/§3.7)----
+export const getGlobalSettings = () => request<GlobalSettings>('/api/v1/settings');
+export const updateGlobalSettings = (body: UpdateGlobalSettingsReq) =>
+  request<GlobalSettings>('/api/v1/settings', { method: 'PUT', body });
+export const rotateMasterKey = () =>
+  request<RotateMasterKeyResult>('/api/v1/settings/rotate-master-key', { method: 'POST' });
+
+export const getCompanySettings = (companyId: string) =>
+  request<CompanySettings>(`/api/v1/companies/${companyId}/settings`);
+export const updateCompanySettings = (companyId: string, body: UpdateCompanySettingsReq) =>
+  request<CompanySettings>(`/api/v1/companies/${companyId}/settings`, { method: 'PUT', body });
+export const resetCompanySettings = (companyId: string) =>
+  request<{ reset: boolean }>(`/api/v1/companies/${companyId}/settings`, { method: 'DELETE' });
+
+export const listSecrets = (companyId: string) =>
+  request<SecretMeta[]>(`/api/v1/companies/${companyId}/secrets`);
+export const setSecret = (companyId: string, secretId: string, value: string) =>
+  request<{ id: string; set: boolean }>(`/api/v1/companies/${companyId}/secrets/${secretId}`, {
+    method: 'PUT',
+    body: { value },
+  });
+export const deleteSecret = (companyId: string, secretId: string) =>
+  request<{ id: string; deleted: boolean }>(`/api/v1/companies/${companyId}/secrets/${secretId}`, {
+    method: 'DELETE',
+  });
 

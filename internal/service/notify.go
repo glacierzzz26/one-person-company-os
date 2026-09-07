@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/glacierzzz26/one-person-company-os/internal/notify"
 	"github.com/glacierzzz26/one-person-company-os/internal/task"
 )
 
@@ -13,24 +14,39 @@ import (
 // 事件点即时发:requestApproval(熔断 / planner ask / 高险审批门唯一汇点)转 waiting_approval 即推送,
 // 保证熔断 ≤1 分钟触达;每日摘要/待审批 recap 由 server 定时发(见 digest.go)。
 const (
-	notifyKindFuse     = "熔断"     // 工程任务评审连续驳回熔断
-	notifyKindApproval = "待审批"   // 非熔断的等待人工(ask/高险门)
+	notifyKindFuse     = "熔断"  // 工程任务评审连续驳回熔断
+	notifyKindApproval = "待审批" // 非熔断的等待人工(ask/高险门)
 )
 
 // notifyApproval 在任务转 waiting_approval 时即时通知人工(Phase 6.5)。
-// best-effort:未配置通知器直接返回;发送失败仅记日志,绝不回传错误影响审批流。
+// Phase 9.3:按任务归属公司机密 feishu_webhook 路由(notifyCompany);task 无公司归属 → 静默跳过
+// (company 隔离下无通道)。best-effort:发送失败仅记日志,绝不回传错误影响审批流。
 func (s *Service) notifyApproval(ctx context.Context, t task.Task, approvalID, reason string) {
-	if !s.NotifyEnabled() {
+	if t.CompanyID == "" {
 		return
 	}
 	fuse := strings.HasPrefix(reason, "engineering fuse")
-	if err := s.notify.PostText(ctx, approvalAlertText(t, approvalID, reason, fuse)); err != nil {
+	if err := s.notifyCompany(ctx, t.CompanyID, approvalAlertText(t, approvalID, reason, fuse)); err != nil {
 		kind := notifyKindApproval
 		if fuse {
 			kind = notifyKindFuse
 		}
 		log.Printf("notify [%s] task %s: %v", kind, short8(t.ID), err)
 	}
+}
+
+// notifyCompany 把文本推给公司配置的飞书通知。公司无 feishu_webhook 机密 → 静默跳过(返回 nil);
+// 有 webhook + 可选 feishu_secret(加签)→ notify.New(...).PostText。仅公司机密,不读 env(契约 §3.3)。
+func (s *Service) notifyCompany(ctx context.Context, companyID, text string) error {
+	webhook, ok, err := s.OpenSecretCurrent(ctx, companyID, SecretFeishuWebhook)
+	if err != nil {
+		return err
+	}
+	if !ok || webhook == "" {
+		return nil
+	}
+	sec, _, _ := s.OpenSecretCurrent(ctx, companyID, SecretFeishuSecret)
+	return notify.New(webhook, sec).PostText(ctx, text)
 }
 
 // approvalAlertText 组装熔断/待审批告警文本(飞书文本消息,多行)。
