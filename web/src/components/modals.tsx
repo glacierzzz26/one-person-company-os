@@ -7,11 +7,14 @@ import {
   addRepo,
   createDecision,
   createMemory,
+  createPipeline,
+  createProject,
   createTask,
   listCapabilities,
+  runPipeline,
   selectEndpointModel,
 } from '../api/endpoints';
-import type { Capability, DecisionKind, Endpoint, MemoryType, Risk } from '../api/types';
+import type { Capability, DecisionKind, Endpoint, MemoryType, Pipeline, Risk } from '../api/types';
 import { useData } from '../hooks/useApi';
 import { useApp } from '../store/AppContext';
 import { DECISION_KINDS, MEMORY_TYPES } from '../api/types';
@@ -305,6 +308,179 @@ export function RepoCreateModal({ open, onClose, onDone }: ModalProps) {
           <Footer busy={busy} label="登记" onCancel={onClose} />
         </div>
       </Form>
+    </Modal>
+  );
+}
+
+/** 新建项目(Phase 10.1):root 就绪策略 —— 已 git 直接用;空/不存在 → OS mkdir+git init;非空非 git → 400 */
+export function ProjectCreateModal({ open, onClose, onDone }: ModalProps) {
+  const { message } = App.useApp();
+  const { companyId } = useApp();
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (v: { name: string; root_path: string; description?: string }) => {
+    if (!companyId) return;
+    setBusy(true);
+    try {
+      await createProject(companyId, { name: v.name, root_path: v.root_path.trim(), description: v.description });
+      message.success('项目已建(root 已就绪为 git 仓库)');
+      onClose();
+      onDone();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open={open} title="新建项目" onCancel={onClose} footer={null} width={560}>
+      <Form layout="vertical" onFinish={submit}>
+        <Form.Item name="name" label="名称 *" rules={[{ required: true, message: '必填' }]}>
+          <Input placeholder="例:acme-web(整目录一个 git 仓库的容器)" maxLength={120} />
+        </Form.Item>
+        <Form.Item name="root_path" label="Root 目录(绝对路径)*" rules={[{ required: true, message: '必填' }]}>
+          <Input placeholder="/srv/projects/acme-web" className="mono" />
+        </Form.Item>
+        <Form.Item name="description" label="描述">
+          <Input.TextArea rows={2} placeholder="这个项目(目录)是做什么的" />
+        </Form.Item>
+        <Alert
+          type="info"
+          showIcon
+          message="Root 就绪:指向已有 git 仓库直接用;空/不存在目录将由 OS mkdir + git init。存在且非空但非 git → 400。删除项目绝不碰磁盘目录。"
+          style={{ marginBottom: 12 }}
+        />
+        <div style={{ textAlign: 'right' }}>
+          <Footer busy={busy} label="创建" onCancel={onClose} />
+        </div>
+      </Form>
+    </Modal>
+  );
+}
+
+/** 新建流水线(绑项目):kind(D6 三形态)+ 名称 + 意图描述 + 风险护栏 */
+export function PipelineCreateModal({
+  open,
+  onClose,
+  onDone,
+  projectId,
+}: ModalProps & { projectId: string }) {
+  const { message } = App.useApp();
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (v: { kind: Pipeline['kind']; name: string; description?: string; risk?: Risk }) => {
+    setBusy(true);
+    try {
+      await createPipeline(projectId, {
+        name: v.name,
+        kind: v.kind,
+        description: v.description,
+        risk: v.risk,
+      });
+      message.success('流水线已建:run 会在项目目录内建 engineering 任务执行');
+      onClose();
+      onDone();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open={open} title="新建流水线" onCancel={onClose} footer={null} width={560}>
+      <Form layout="vertical" onFinish={submit}>
+        <Form.Item name="kind" label="形态" initialValue="bugfix">
+          <Select
+            options={[
+              { value: 'bugfix', label: 'bugfix · 缺陷修复' },
+              { value: 'develop', label: 'develop · 特性开发' },
+              { value: 'ops_patrol', label: 'ops_patrol · 运维巡检(10.2 形态)' },
+            ]}
+          />
+        </Form.Item>
+        <Form.Item name="name" label="名称 *" rules={[{ required: true, message: '必填' }]}>
+          <Input placeholder="例:fix-login-flaky" maxLength={120} />
+        </Form.Item>
+        <Form.Item name="description" label="意图描述(自然语言)" rules={[{ required: true, message: '流水线需意图文本(run 缺省即用它)' }]}>
+          <Input.TextArea rows={3} placeholder="例:登录接口偶发 500,先复现、修根因并补回归" />
+        </Form.Item>
+        <Form.Item name="risk" label="风险护栏" initialValue="medium">
+          <Select
+            options={[
+              { value: 'low', label: 'low' },
+              { value: 'medium', label: 'medium' },
+              { value: 'high', label: 'high(run 将卡审批门)' },
+            ]}
+          />
+        </Form.Item>
+        <div style={{ textAlign: 'right' }}>
+          <Footer busy={busy} label="创建" onCancel={onClose} />
+        </div>
+      </Form>
+    </Modal>
+  );
+}
+
+/** 运行流水线:请求文本(缺省 = 流水线意图)确认后 POST run → 建单入队 */
+export function PipelineRunModal({
+  open,
+  onClose,
+  onDone,
+  pipeline,
+}: ModalProps & { pipeline: Pipeline | null }) {
+  const { message } = App.useApp();
+  const [busy, setBusy] = useState(false);
+  const [request, setRequest] = useState('');
+
+  // 每次打开重置为流水线描述(本次可改;清空 = 缺省仍用描述)。
+  useEffect(() => {
+    if (open) setRequest(pipeline?.description ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pipeline?.id]);
+
+  const submit = async () => {
+    if (!pipeline) return;
+    setBusy(true);
+    try {
+      const res = await runPipeline(pipeline.id, { request: request.trim() || undefined });
+      message.success(`run 已入队:task ${res.task_id.slice(0, 8)}(${res.task.status})`);
+      onClose();
+      onDone();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      title={pipeline ? `运行流水线 · ${pipeline.name}` : '运行流水线'}
+      onCancel={onClose}
+      onOk={submit}
+      confirmLoading={busy}
+      okText="运行"
+      cancelText="取消"
+      width={560}
+    >
+      <div className="dim" style={{ fontSize: 12, marginBottom: 8 }}>
+        kind: {pipeline?.kind} · risk: {pipeline?.risk} · 每次 run = 项目目录内一条 engineering 任务(driver 回合)。
+      </div>
+      <Input.TextArea
+        rows={4}
+        value={request}
+        onChange={(e) => setRequest(e.target.value)}
+        placeholder="本次运行请求文本;留空 = 用流水线意图描述"
+      />
+      <Alert
+        type="info"
+        showIcon
+        message="异步建单入队(qstatus ready);同项目同时仅一条活跃 run(串行守卫)。执行:os queue work 或 server 队列自驱。"
+        style={{ marginTop: 10 }}
+      />
     </Modal>
   );
 }

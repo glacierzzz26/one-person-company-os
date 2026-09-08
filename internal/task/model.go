@@ -28,6 +28,7 @@ type Task struct {
 	WriterEndpointID   *string `json:"writer_endpoint_id"`   // 写者模型端点;空 = agent 默认
 	ReviewerEndpointID *string `json:"reviewer_endpoint_id"` // 审阅模型端点;空 = agent 默认
 	TestEndpointID     *string `json:"test_endpoint_id"`     // test 判读端点(8.4;默认 standard 档,与 review 分槽);空 = 回退 reviewer/writer
+	ProjectID          *string `json:"project_id"`           // Phase 10.1:流水线 run 产物挂项目;空 = 非流水线任务
 	CreatedAt          int64   `json:"created_at"`
 	UpdatedAt          int64   `json:"updated_at"`
 }

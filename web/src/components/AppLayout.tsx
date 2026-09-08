@@ -7,6 +7,7 @@ import {
   CarryOutOutlined,
   CheckSquareOutlined,
   DashboardOutlined,
+  FolderOutlined,
   GithubOutlined,
   HistoryOutlined,
   MoonOutlined,
@@ -40,6 +41,7 @@ const NAV = [
     label: '执行',
     children: [
       { key: '/tasks', label: '任务中心', icon: <CarryOutOutlined /> },
+      { key: '/projects', label: '项目 · 流水线', icon: <FolderOutlined /> },
       { key: '/repos', label: '研发仓库 · 通道 B', icon: <GithubOutlined /> },
     ],
   } as never,
@@ -73,7 +75,7 @@ export default function AppLayout() {
     if (loc.pathname === '/') return '/';
     // 一级路径匹配(如 /approvals/xxx → /approvals 仍高亮)
     const first = `/${loc.pathname.split('/')[1] || ''}`;
-    const valid = ['/approvals', '/decisions', '/tasks', '/repos', '/memories', '/audit', '/endpoints', '/settings'];
+    const valid = ['/approvals', '/decisions', '/tasks', '/repos', '/projects', '/memories', '/audit', '/endpoints', '/settings'];
     return valid.includes(first) ? first : '/';
   }, [loc.pathname]);
 

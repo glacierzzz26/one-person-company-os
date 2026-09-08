@@ -32,13 +32,24 @@ func apiErr(w http.ResponseWriter, status int, code, msg string) {
 	writeJSON(w, status, map[string]any{"ok": false, "error": map[string]string{"code": code, "message": msg}})
 }
 
-// handleServiceErr 把 service 错误映射到 HTTP(sql.ErrNoRows → 404 not_found;其余 → 500 internal)。
+// handleServiceErr 把 service 错误映射到 HTTP:
+//   - sql.ErrNoRows → 404 not_found
+//   - service.ErrInvalid → 400 bad_request(客户端输入非法:kind/risk/root_path 等)
+//   - service.ErrProjectBusy/ErrPipelineBusy/ErrConflict → 409 conflict(重名 / 活跃 run 串行守卫)
+//   - 其余 → 500 internal
 func handleServiceErr(w http.ResponseWriter, err error) {
-	if errors.Is(err, sql.ErrNoRows) {
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
 		apiErr(w, http.StatusNotFound, "not_found", err.Error())
-		return
+	case errors.Is(err, service.ErrInvalid):
+		apiErr(w, http.StatusBadRequest, "bad_request", err.Error())
+	case errors.Is(err, service.ErrProjectBusy),
+		errors.Is(err, service.ErrPipelineBusy),
+		errors.Is(err, service.ErrConflict):
+		apiErr(w, http.StatusConflict, "conflict", err.Error())
+	default:
+		apiErr(w, http.StatusInternalServerError, "internal", err.Error())
 	}
-	apiErr(w, http.StatusInternalServerError, "internal", err.Error())
 }
 
 // decodeJSON 解析 JSON body;失败回 400 并返回 false。
@@ -104,6 +115,18 @@ func (s *Server) registerAPIRoutes(r chi.Router) {
 	r.Get("/companies/{id}/repos", s.apiListRepos)
 	r.Post("/companies/{id}/repos", s.apiAddRepo)
 	r.Post("/companies/{id}/intake/sync", s.apiIntakeSync)
+
+	// Phase 10.1 — 项目 + 声明式流水线(契约 docs/phase10/design/project-pipeline-foundation.md §3.4)。
+	r.Get("/companies/{id}/projects", s.apiListProjects)
+	r.Post("/companies/{id}/projects", s.apiCreateProject)
+	r.Get("/projects/{id}", s.apiGetProject)
+	r.Delete("/projects/{id}", s.apiDeleteProject)
+	r.Get("/projects/{id}/pipelines", s.apiListPipelines)
+	r.Post("/projects/{id}/pipelines", s.apiCreatePipeline)
+	r.Get("/projects/{id}/tasks", s.apiListProjectTasks) // 最近 runs(复用 ListTasksByProject)
+	r.Get("/pipelines/{id}", s.apiGetPipeline)
+	r.Delete("/pipelines/{id}", s.apiDeletePipeline)
+	r.Post("/pipelines/{id}/run", s.apiRunPipeline)
 
 	// 设置(Phase 9.2):控制台令牌轮换(Bearer 鉴权后;旧令牌即失效)。
 	r.Put("/settings/console-token", s.handleRotateConsoleToken)

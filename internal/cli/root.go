@@ -83,6 +83,8 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(endpointCmd())
 	root.AddCommand(repoCmd())
 	root.AddCommand(intakeCmd())
+	root.AddCommand(projectCmd())
+	root.AddCommand(pipelineCmd())
 	root.AddCommand(serverCmd())
 	return root
 }

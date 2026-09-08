@@ -12,6 +12,8 @@ import type {
   CreateCompanyReq,
   CreateDecisionReq,
   CreateMemoryReq,
+  CreatePipelineReq,
+  CreateProjectReq,
   CreateTaskReq,
   DecideApprovalReq,
   Decision,
@@ -22,10 +24,14 @@ import type {
   Memory,
   ModelInfo,
   Overview,
+  Pipeline,
+  Project,
   Repo,
   RotateConsoleTokenReq,
   RotateConsoleTokenResult,
   RotateMasterKeyResult,
+  RunPipelineReq,
+  RunPipelineResult,
   SecretMeta,
   SetupReq,
   SetupResult,
@@ -120,6 +126,27 @@ export const addRepo = (companyId: string, body: AddRepoReq) =>
   request<Repo>(`/api/v1/companies/${companyId}/repos`, { method: 'POST', body });
 export const intakeSync = (companyId: string) =>
   request<IntakeResult[]>(`/api/v1/companies/${companyId}/intake/sync`, { method: 'POST' });
+
+// ---- 项目 · 流水线(Phase 10.1,契约 project-pipeline-foundation.md §3.4)----
+export const listProjects = (companyId: string) =>
+  request<Project[]>(`/api/v1/companies/${companyId}/projects`);
+export const createProject = (companyId: string, body: CreateProjectReq) =>
+  request<Project>(`/api/v1/companies/${companyId}/projects`, { method: 'POST', body });
+export const getProject = (id: string) => request<Project>(`/api/v1/projects/${id}`);
+export const deleteProject = (id: string) =>
+  request<{ id: string; deleted: boolean }>(`/api/v1/projects/${id}`, { method: 'DELETE' });
+
+export const listPipelines = (projectId: string) =>
+  request<Pipeline[]>(`/api/v1/projects/${projectId}/pipelines`);
+export const createPipeline = (projectId: string, body: CreatePipelineReq) =>
+  request<Pipeline>(`/api/v1/projects/${projectId}/pipelines`, { method: 'POST', body });
+export const listProjectTasks = (projectId: string, limit = 20) =>
+  request<Task[]>(`/api/v1/projects/${projectId}/tasks?limit=${limit}`);
+export const getPipeline = (id: string) => request<Pipeline>(`/api/v1/pipelines/${id}`);
+export const deletePipeline = (id: string) =>
+  request<{ id: string; deleted: boolean }>(`/api/v1/pipelines/${id}`, { method: 'DELETE' });
+export const runPipeline = (id: string, body?: RunPipelineReq) =>
+  request<RunPipelineResult>(`/api/v1/pipelines/${id}/run`, { method: 'POST', body });
 
 // ---- setup / console token(Phase 9.2,契约 console-access.md §3.6)----
 export const setupStatus = () => request<SetupStatus>('/api/v1/setup/status');

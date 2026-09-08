@@ -84,6 +84,7 @@ CREATE TABLE task (
     writer_endpoint_id   TEXT REFERENCES endpoint(id),
     reviewer_endpoint_id TEXT REFERENCES endpoint(id),
     test_endpoint_id     TEXT REFERENCES endpoint(id),  -- test 判读槽(8.4;默认 standard,与 review 分槽)
+    project_id           TEXT REFERENCES projects(id),  -- Phase 10.1:流水线 run 产物挂项目(可空;删项目先断引用)
     created_at     INTEGER NOT NULL,
     updated_at     INTEGER NOT NULL
 );
@@ -237,3 +238,34 @@ CREATE TABLE secret (
     updated_at INTEGER NOT NULL,
     PRIMARY KEY (company_id, id)
 );
+
+-- Phase 10.1 项目实体 + 声明式流水线(契约 project-pipeline-foundation.md) —— 与迁移 0013 终态一致。
+
+CREATE TABLE projects (
+    id          TEXT PRIMARY KEY,
+    company_id  TEXT NOT NULL REFERENCES company(id),
+    name        TEXT NOT NULL,
+    root_path   TEXT NOT NULL,                 -- 绝对路径;整项目 git 仓库根(layout A)
+    description TEXT NOT NULL DEFAULT '',
+    created_at  INTEGER NOT NULL,
+    updated_at  INTEGER NOT NULL,
+    UNIQUE (company_id, name)
+);
+
+CREATE INDEX idx_projects_company ON projects (company_id);
+
+CREATE TABLE pipelines (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES projects(id),
+    name        TEXT NOT NULL,
+    kind        TEXT NOT NULL DEFAULT 'bugfix',   -- bugfix | develop | ops_patrol(D6;service 白名单校验)
+    description TEXT NOT NULL DEFAULT '',         -- 意图(自然语言;run 无 request 时即 writer 请求)
+    risk        TEXT NOT NULL DEFAULT 'medium',   -- 护栏:low|medium|high
+    status      TEXT NOT NULL DEFAULT 'active',   -- active | disabled(建即 active;run 须 active)
+    schedule    TEXT NOT NULL DEFAULT '',         -- 10.2 才解析;本期恒空
+    created_at  INTEGER NOT NULL,
+    updated_at  INTEGER NOT NULL,
+    UNIQUE (project_id, name)
+);
+
+CREATE INDEX idx_pipelines_project ON pipelines (project_id);

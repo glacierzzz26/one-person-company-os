@@ -83,6 +83,19 @@ export const DISPOSITION_CN: Record<string, string> = {
 };
 export const dispositionLabel = (k: string): string => DISPOSITION_CN[k] ?? k;
 
+// pipeline 形态(D6 三形态,Phase 10.1):bugfix | develop | ops_patrol
+export const PIPELINE_KIND_CN: Record<string, string> = {
+  bugfix: '缺陷修复',
+  develop: '特性开发',
+  ops_patrol: '运维巡检',
+};
+export const pipelineKindLabel = (k: string): string => PIPELINE_KIND_CN[k] ?? k;
+
+// 流水线状态:active | disabled(建即 active;run 须 active)
+export const PIPELINE_STATUS_CN: Record<string, string> = { active: '启用', disabled: '停用' };
+export const pipelineStatusLabel = (s: string): string => PIPELINE_STATUS_CN[s] ?? s;
+export const pipelineStatusPreset = (s: string): Preset => (s === 'active' ? 'success' : 'default');
+
 export const ENDPOINT_ROLE_CN: Record<string, string> = { pool: '通用池 pool', planner: '规划 planner', standby: '热备 standby' };
 export const endpointRoleLabel = (r: string): string => ENDPOINT_ROLE_CN[r] ?? r;
 

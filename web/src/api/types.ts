@@ -84,6 +84,7 @@ export interface Task {
   writer_endpoint_id: string | null;
   reviewer_endpoint_id: string | null;
   test_endpoint_id: string | null; // test 判读槽(8.4 分槽;默认 standard 档)
+  project_id: string | null; // Phase 10.1:流水线 run 产物挂项目;空 = 非流水线任务
   created_at: number;
   updated_at: number;
 }
@@ -229,6 +230,35 @@ export interface IntakeResult {
   asks: IntakeAsk[];
 }
 
+// ===================== project / pipeline(Phase 10.1) =====================
+export interface Project {
+  id: string;
+  company_id: string;
+  name: string;
+  root_path: string; // 整项目 git 仓库根(layout A);删除不碰磁盘
+  description: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export const PIPELINE_KINDS = ['bugfix', 'develop', 'ops_patrol'] as const;
+export type PipelineKind = (typeof PIPELINE_KINDS)[number];
+
+export type PipelineStatus = 'active' | 'disabled';
+
+export interface Pipeline {
+  id: string;
+  project_id: string;
+  name: string;
+  kind: PipelineKind;
+  description: string; // 意图(自然语言;run 无 request 时即 writer 请求)
+  risk: Risk;
+  status: PipelineStatus;
+  schedule: string; // 10.2 才解析;本期恒 ''
+  created_at: number;
+  updated_at: number;
+}
+
 // ===================== overview 聚合 =====================
 export interface RDTask {
   id: string;
@@ -319,6 +349,31 @@ export interface AddRepoReq {
 export interface DecideApprovalReq {
   decision: 'approve' | 'reject' | 'changes';
   note?: string;
+}
+
+export interface CreateProjectReq {
+  name: string;
+  root_path: string; // 绝对路径:须已 git,或空/不存在(OS git init);非空非 git → 400
+  description?: string;
+}
+
+export interface CreatePipelineReq {
+  name: string;
+  kind?: PipelineKind; // 空 = bugfix
+  description?: string; // 意图
+  risk?: Risk; // 空 = medium
+}
+
+export interface RunPipelineReq {
+  request?: string; // 本次运行意图;缺省 = pipeline.description
+}
+
+// POST /pipelines/{id}/run 响应:{task_id, project_id, pipeline_id, task}
+export interface RunPipelineResult {
+  task_id: string;
+  project_id: string | null;
+  pipeline_id: string;
+  task: Task;
 }
 
 // ===================== setup / console token(Phase 9.2)=====================

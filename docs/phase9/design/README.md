@@ -1,7 +1,7 @@
 # Phase 9 设计索引
 
 > 该阶段定稿设计登记处。设计定稿后在此登记,此后按它执行。
-> 未立项存档草案不入索引(如 `declarative-pipelines.md` —— 声明式流水线,Phase 10 候选)。
+> 未立项存档草案不入索引。`declarative-pipelines.md` 已随 2026-09-07 定稿升格为 **Phase 10 方向**(见 [phase10/design](../phase10/design/declarative-pipelines.md));本 phase9 内同稿只读保留为历史草案。
 
 | 文档 | 状态 | 定稿日期 |
 |---|---|---|

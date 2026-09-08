@@ -14,6 +14,8 @@ import Approvals from './pages/Approvals';
 import Decisions from './pages/Decisions';
 import Tasks from './pages/Tasks';
 import Repos from './pages/Repos';
+import Projects from './pages/Projects';
+import ProjectDetail from './pages/ProjectDetail';
 import Memories from './pages/Memories';
 import Audit from './pages/Audit';
 import Endpoints from './pages/Endpoints';
@@ -75,6 +77,8 @@ function BootGate() {
           <Route path="/decisions" element={<Decisions />} />
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/repos" element={<Repos />} />
+          <Route path="/projects" element={<Projects />} />
+          <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/memories" element={<Memories />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="/endpoints" element={<Endpoints />} />

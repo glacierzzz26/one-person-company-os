@@ -26,6 +26,8 @@ type TaskParams struct {
 	WriterEndpointID   *string // 写者端点;默认 cheap(proto=anthropic,可作 claude 委派后端;空 = claude 自带)
 	ReviewerEndpointID *string // 把关端点;默认 frontier(proto=openai)
 	TestEndpointID     *string // test 判读端点(8.4 分槽);默认 standard(proto=openai)
+	// Phase 10.1:流水线 run 产物挂项目(可空 = 非流水线任务)。删除项目时先断引用,任务本体保留。
+	ProjectID *string
 }
 
 func (s *Service) CreateTask(ctx context.Context, p TaskParams) (task.Task, error) {
@@ -74,6 +76,7 @@ func (s *Service) createTask(ctx context.Context, p TaskParams, actor string) (t
 		WriterEndpointID:   p.WriterEndpointID,
 		ReviewerEndpointID: p.ReviewerEndpointID,
 		TestEndpointID:     p.TestEndpointID,
+		ProjectID:          p.ProjectID,
 		CreatedAt:          now, UpdatedAt: now,
 	}
 	created, err := s.store.CreateTask(ctx, t)

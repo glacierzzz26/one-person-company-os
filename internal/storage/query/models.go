@@ -157,6 +157,19 @@ type Permission struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
+type Pipeline struct {
+	ID          string `json:"id"`
+	ProjectID   string `json:"project_id"`
+	Name        string `json:"name"`
+	Kind        string `json:"kind"`
+	Description string `json:"description"`
+	Risk        string `json:"risk"`
+	Status      string `json:"status"`
+	Schedule    string `json:"schedule"`
+	CreatedAt   int64  `json:"created_at"`
+	UpdatedAt   int64  `json:"updated_at"`
+}
+
 type Policy struct {
 	ID        string `json:"id"`
 	CompanyID string `json:"company_id"`
@@ -166,6 +179,16 @@ type Policy struct {
 	Enabled   int64  `json:"enabled"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
+}
+
+type Project struct {
+	ID          string `json:"id"`
+	CompanyID   string `json:"company_id"`
+	Name        string `json:"name"`
+	RootPath    string `json:"root_path"`
+	Description string `json:"description"`
+	CreatedAt   int64  `json:"created_at"`
+	UpdatedAt   int64  `json:"updated_at"`
 }
 
 type Repo struct {
@@ -211,6 +234,7 @@ type Task struct {
 	WriterEndpointID   sql.NullString `json:"writer_endpoint_id"`
 	ReviewerEndpointID sql.NullString `json:"reviewer_endpoint_id"`
 	TestEndpointID     sql.NullString `json:"test_endpoint_id"`
+	ProjectID          sql.NullString `json:"project_id"`
 	CreatedAt          int64          `json:"created_at"`
 	UpdatedAt          int64          `json:"updated_at"`
 }

@@ -26,6 +26,7 @@ func (s *Store) CreateTask(ctx context.Context, t task.Task) (task.Task, error) 
 		WriterEndpointID:   ptrToNull(t.WriterEndpointID),
 		ReviewerEndpointID: ptrToNull(t.ReviewerEndpointID),
 		TestEndpointID:     ptrToNull(t.TestEndpointID),
+		ProjectID:          ptrToNull(t.ProjectID),
 		CreatedAt:          t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	})
 	if err != nil {
@@ -218,6 +219,7 @@ func toTask(r query.Task) task.Task {
 		WriterEndpointID:   nullToPtr(r.WriterEndpointID),
 		ReviewerEndpointID: nullToPtr(r.ReviewerEndpointID),
 		TestEndpointID:     nullToPtr(r.TestEndpointID),
+		ProjectID:          nullToPtr(r.ProjectID),
 		CreatedAt:          r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }
@@ -232,6 +234,37 @@ func (s *Store) SetTaskRound(ctx context.Context, taskID string, roundNo, confli
 		return task.Task{}, err
 	}
 	return toTask(row), nil
+}
+
+// ListTasksByProject 返回挂某项目的任务(创建倒序,limit 截断)。Phase 10.1:项目详情「最近 runs」。
+func (s *Store) ListTasksByProject(ctx context.Context, projectID string, limit int64) ([]task.Task, error) {
+	rows, err := s.q.ListTasksByProject(ctx, query.ListTasksByProjectParams{
+		ProjectID: ptrToNull(&projectID), Limit: limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]task.Task, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toTask(r))
+	}
+	return out, nil
+}
+
+// CountActiveTasksByProject 返回某项目下活跃任务数(pending/running/waiting_approval)。
+// Phase 10.1:同项目 run 串行守卫(>0 → 409)。
+func (s *Store) CountActiveTasksByProject(ctx context.Context, projectID string) (int64, error) {
+	cnt, err := s.q.CountActiveTasksByProject(ctx, ptrToNull(&projectID))
+	if err != nil {
+		return 0, err
+	}
+	return cnt, nil
+}
+
+// ClearTaskProject 解除某项目下全部任务的 project 引用(project_id → NULL)。
+// Phase 10.1:删项目先断引用(FK ON),保留任务历史,不级联删任务。
+func (s *Store) ClearTaskProject(ctx context.Context, projectID string) (int64, error) {
+	return s.q.ClearTaskProject(ctx, ptrToNull(&projectID))
 }
 
 func nullToPtr(s sql.NullString) *string {
