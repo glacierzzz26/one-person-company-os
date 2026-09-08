@@ -2,12 +2,12 @@
 SELECT * FROM app_setting WHERE id = ?;
 
 -- name: InsertAppSetting :one
-INSERT INTO app_setting (id, engine_mode_default, agent_cli_default, console_token_hash, digest_time, http_port, poll_min, queue_work, queue_interval_sec, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO app_setting (id, engine_mode_default, agent_cli_default, console_token_hash, digest_time, http_port, poll_min, queue_work, queue_interval_sec, schedule_poll_sec, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateAppSetting :one
-UPDATE app_setting SET engine_mode_default = ?, agent_cli_default = ?, console_token_hash = ?, digest_time = ?, http_port = ?, poll_min = ?, queue_work = ?, queue_interval_sec = ?, updated_at = ? WHERE id = ? RETURNING *;
+UPDATE app_setting SET engine_mode_default = ?, agent_cli_default = ?, console_token_hash = ?, digest_time = ?, http_port = ?, poll_min = ?, queue_work = ?, queue_interval_sec = ?, schedule_poll_sec = ?, updated_at = ? WHERE id = ? RETURNING *;
 
 -- name: GetCompanySetting :one
 SELECT * FROM company_setting WHERE company_id = ?;

@@ -53,3 +53,14 @@ type Pipeline struct {
 	CreatedAt   int64  `json:"created_at"`
 	UpdatedAt   int64  `json:"updated_at"`
 }
+
+// ScheduledPipeline 调度器视角的流水线子集(仅含判下次命中/触发 run 所需字段)。
+// Phase 10.2:ListScheduledPipelines 的返回类型 —— active 且 schedule 非空;整行 Pipeline 的其余
+// 字段(description/risk/status/created_at 等)对调度不透明,不零值伪造整行。
+type ScheduledPipeline struct {
+	ID        string `json:"id"`
+	ProjectID string `json:"project_id"`
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	Schedule  string `json:"schedule"`
+}

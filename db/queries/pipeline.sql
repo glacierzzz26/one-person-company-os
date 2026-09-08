@@ -14,3 +14,11 @@ DELETE FROM pipelines WHERE id = ?;
 
 -- name: DeletePipelinesByProject :execrows
 DELETE FROM pipelines WHERE project_id = ?;
+
+-- name: UpdatePipelineSchedule :one
+UPDATE pipelines SET schedule = ?, updated_at = ? WHERE id = ? RETURNING *;
+
+-- name: ListScheduledPipelines :many
+SELECT id, project_id, name, kind, schedule FROM pipelines
+WHERE status = 'active' AND schedule != ''
+ORDER BY created_at ASC;

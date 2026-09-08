@@ -45,19 +45,21 @@ func TestE1GetPutGlobalSettings(t *testing.T) {
 	var gs globalSettingsDTO
 	decodeData(t, env, &gs)
 	if gs.EngineModeDefault != "live" || gs.AgentCLIDefault != "claude" || gs.DigestTime != "09:00" ||
-		gs.HTTPPort != 8787 || gs.PollMin != 5 || gs.QueueWork || gs.QueueIntervalSec != 10 || !gs.ConsoleTokenSet {
+		gs.HTTPPort != 8787 || gs.PollMin != 5 || gs.QueueWork || gs.QueueIntervalSec != 10 ||
+		gs.SchedulePollSec != 0 || !gs.ConsoleTokenSet {
 		t.Fatalf("GET settings default = %+v", gs)
 	}
 
 	// PUT 部分更新(请求不带 console 相关字段)→ 生效 + 令牌仍有效(hash 保留,红线 guard)。
+	// 10.2:schedule_poll_sec 一并收 + 回包回显(Web 设置行读它;DGO 防只写不回)。
 	rec, env = doBearer(t, h, http.MethodPut, "/api/v1/settings", tok,
-		`{"agent_cli_default":"codex","http_port":8899,"queue_work":true,"digest_time":"off"}`)
+		`{"agent_cli_default":"codex","http_port":8899,"queue_work":true,"digest_time":"off","schedule_poll_sec":60}`)
 	if rec.Code != http.StatusOK || !env.OK {
 		t.Fatalf("PUT settings: code=%d env=%+v body=%s", rec.Code, env, rec.Body.String())
 	}
 	decodeData(t, env, &gs)
 	if gs.AgentCLIDefault != "codex" || gs.HTTPPort != 8899 || !gs.QueueWork || gs.DigestTime != "" ||
-		gs.EngineModeDefault != "live" || !gs.ConsoleTokenSet {
+		gs.EngineModeDefault != "live" || gs.SchedulePollSec != 60 || !gs.ConsoleTokenSet {
 		t.Fatalf("PUT settings result = %+v", gs)
 	}
 	if rec, _ := doBearer(t, h, http.MethodGet, "/api/v1/companies", tok, ""); rec.Code != http.StatusOK {

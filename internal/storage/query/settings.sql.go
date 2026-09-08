@@ -34,7 +34,7 @@ func (q *Queries) DeleteSecret(ctx context.Context, arg DeleteSecretParams) erro
 }
 
 const getAppSetting = `-- name: GetAppSetting :one
-SELECT id, engine_mode_default, agent_cli_default, console_token_hash, digest_time, http_port, poll_min, queue_work, queue_interval_sec, updated_at FROM app_setting WHERE id = ?
+SELECT id, engine_mode_default, agent_cli_default, console_token_hash, digest_time, http_port, poll_min, queue_work, queue_interval_sec, schedule_poll_sec, updated_at FROM app_setting WHERE id = ?
 `
 
 func (q *Queries) GetAppSetting(ctx context.Context, id string) (AppSetting, error) {
@@ -50,6 +50,7 @@ func (q *Queries) GetAppSetting(ctx context.Context, id string) (AppSetting, err
 		&i.PollMin,
 		&i.QueueWork,
 		&i.QueueIntervalSec,
+		&i.SchedulePollSec,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -95,9 +96,9 @@ func (q *Queries) GetSecret(ctx context.Context, arg GetSecretParams) (Secret, e
 }
 
 const insertAppSetting = `-- name: InsertAppSetting :one
-INSERT INTO app_setting (id, engine_mode_default, agent_cli_default, console_token_hash, digest_time, http_port, poll_min, queue_work, queue_interval_sec, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, engine_mode_default, agent_cli_default, console_token_hash, digest_time, http_port, poll_min, queue_work, queue_interval_sec, updated_at
+INSERT INTO app_setting (id, engine_mode_default, agent_cli_default, console_token_hash, digest_time, http_port, poll_min, queue_work, queue_interval_sec, schedule_poll_sec, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, engine_mode_default, agent_cli_default, console_token_hash, digest_time, http_port, poll_min, queue_work, queue_interval_sec, schedule_poll_sec, updated_at
 `
 
 type InsertAppSettingParams struct {
@@ -110,6 +111,7 @@ type InsertAppSettingParams struct {
 	PollMin           int64  `json:"poll_min"`
 	QueueWork         int64  `json:"queue_work"`
 	QueueIntervalSec  int64  `json:"queue_interval_sec"`
+	SchedulePollSec   int64  `json:"schedule_poll_sec"`
 	UpdatedAt         int64  `json:"updated_at"`
 }
 
@@ -124,6 +126,7 @@ func (q *Queries) InsertAppSetting(ctx context.Context, arg InsertAppSettingPara
 		arg.PollMin,
 		arg.QueueWork,
 		arg.QueueIntervalSec,
+		arg.SchedulePollSec,
 		arg.UpdatedAt,
 	)
 	var i AppSetting
@@ -137,6 +140,7 @@ func (q *Queries) InsertAppSetting(ctx context.Context, arg InsertAppSettingPara
 		&i.PollMin,
 		&i.QueueWork,
 		&i.QueueIntervalSec,
+		&i.SchedulePollSec,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -241,7 +245,7 @@ func (q *Queries) ListSecrets(ctx context.Context, companyID string) ([]Secret, 
 }
 
 const updateAppSetting = `-- name: UpdateAppSetting :one
-UPDATE app_setting SET engine_mode_default = ?, agent_cli_default = ?, console_token_hash = ?, digest_time = ?, http_port = ?, poll_min = ?, queue_work = ?, queue_interval_sec = ?, updated_at = ? WHERE id = ? RETURNING id, engine_mode_default, agent_cli_default, console_token_hash, digest_time, http_port, poll_min, queue_work, queue_interval_sec, updated_at
+UPDATE app_setting SET engine_mode_default = ?, agent_cli_default = ?, console_token_hash = ?, digest_time = ?, http_port = ?, poll_min = ?, queue_work = ?, queue_interval_sec = ?, schedule_poll_sec = ?, updated_at = ? WHERE id = ? RETURNING id, engine_mode_default, agent_cli_default, console_token_hash, digest_time, http_port, poll_min, queue_work, queue_interval_sec, schedule_poll_sec, updated_at
 `
 
 type UpdateAppSettingParams struct {
@@ -253,6 +257,7 @@ type UpdateAppSettingParams struct {
 	PollMin           int64  `json:"poll_min"`
 	QueueWork         int64  `json:"queue_work"`
 	QueueIntervalSec  int64  `json:"queue_interval_sec"`
+	SchedulePollSec   int64  `json:"schedule_poll_sec"`
 	UpdatedAt         int64  `json:"updated_at"`
 	ID                string `json:"id"`
 }
@@ -267,6 +272,7 @@ func (q *Queries) UpdateAppSetting(ctx context.Context, arg UpdateAppSettingPara
 		arg.PollMin,
 		arg.QueueWork,
 		arg.QueueIntervalSec,
+		arg.SchedulePollSec,
 		arg.UpdatedAt,
 		arg.ID,
 	)
@@ -281,6 +287,7 @@ func (q *Queries) UpdateAppSetting(ctx context.Context, arg UpdateAppSettingPara
 		&i.PollMin,
 		&i.QueueWork,
 		&i.QueueIntervalSec,
+		&i.SchedulePollSec,
 		&i.UpdatedAt,
 	)
 	return i, err

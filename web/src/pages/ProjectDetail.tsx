@@ -1,17 +1,47 @@
-// 项目详情(Phase 10.1):GET /projects/{id} + /projects/{id}/pipelines + /projects/{id}/tasks(最近 runs)。
-// 三 fetcher 并拉:最近 runs 带轮询(10s)让 run 状态活着;流水线行「运行」→ request Modal → POST run。
-import { useState } from 'react';
-import { App, Button, Card, Flex, Popconfirm, Space, Table, Tag, Typography } from 'antd';
-import { ArrowLeftOutlined, DeleteOutlined, FolderOutlined, PlayCircleOutlined, PlusOutlined } from '@ant-design/icons';
+// 项目详情(Phase 10.1 + 10.2):GET /projects/{id} + /projects/{id}/pipelines + /projects/{id}/tasks(最近 runs)。
+// 10.2 增:流水线「调度」列(cron/—)+ 改调度 Modal(PUT schedule);runs 表「形态」列(pipeline_id → kind
+// 徽标)+ ops_patrol 完成行「裁决」(result 解析 ok/severity/action)+ 「查看报告」→ 受控读端点纯文本抽屉。
+import { useEffect, useState } from 'react';
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Flex,
+  Modal,
+  Popconfirm,
+  Space,
+  Spin,
+  Table,
+  Tag,
+  Typography,
+} from 'antd';
+import {
+  ArrowLeftOutlined,
+  DeleteOutlined,
+  FileTextOutlined,
+  FolderOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
+  ScheduleOutlined,
+} from '@ant-design/icons';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { Pipeline, Project, Task } from '../api/types';
-import { deletePipeline, deleteProject, getProject, listPipelines, listProjectTasks } from '../api/endpoints';
+import type { PatrolReport, Pipeline, Project, Task } from '../api/types';
+import {
+  deletePipeline,
+  deleteProject,
+  getPatrolReport,
+  getProject,
+  listPipelines,
+  listProjectTasks,
+} from '../api/endpoints';
 import { useApp } from '../store/AppContext';
 import { useData } from '../hooks/useApi';
 import { PageHead, RiskText, EmptyState } from '../components/common';
 import StatusTag from '../components/StatusTag';
-import { PipelineCreateModal, PipelineRunModal } from '../components/modals';
+import { PipelineCreateModal, PipelineRunModal, PipelineScheduleModal } from '../components/modals';
 import { pipelineKindLabel, pipelineStatusLabel, pipelineStatusPreset, taskStatusLabel, taskStatusPreset } from '../utils/dicts';
+import { parsePatrolResult } from '../utils/patrol';
 import { fmtT } from '../utils/time';
 
 export default function ProjectDetail() {
@@ -23,6 +53,8 @@ export default function ProjectDetail() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [runPipeline, setRunPipeline] = useState<Pipeline | null>(null);
+  const [editSched, setEditSched] = useState<Pipeline | null>(null);
+  const [repTask, setRepTask] = useState<Task | null>(null);
 
   const project = useData<Project>(() => getProject(projectId), {
     deps: [projectId, refreshKey],
@@ -42,6 +74,7 @@ export default function ProjectDetail() {
   const p = project.data;
   const pplRows = pipelines.data ?? [];
   const runRows = runs.data ?? [];
+  const pplById = new Map(pplRows.map((pl) => [pl.id, pl]));
 
   const delProject = async () => {
     try {
@@ -67,7 +100,7 @@ export default function ProjectDetail() {
     <div>
       <PageHead
         title={p ? p.name : '项目'}
-        sub="GET /api/v1/projects/{id} · /projects/{id}/pipelines · /projects/{id}/tasks"
+        sub="GET /api/v1/projects/{id} · /projects/{id}/pipelines · /projects/{id}/tasks · /projects/{id}/patrol/{taskID}"
         actions={
           <>
             <Link to="/projects">
@@ -142,18 +175,31 @@ export default function ProjectDetail() {
               ),
             },
             {
+              title: '调度',
+              width: 158,
+              render: (_, pl) =>
+                pl.schedule ? (
+                  <span className="mono" style={{ fontSize: 12 }}>{pl.schedule}</span>
+                ) : (
+                  <span className="dim" style={{ fontSize: 12 }}>—</span>
+                ),
+            },
+            {
               title: '风险',
               width: 90,
               render: (_, pl) => <RiskText risk={pl.risk} />,
             },
-            { title: '创建', width: 120, render: (_, pl) => <span className="dim" style={{ fontSize: 12 }}>{fmtT(pl.created_at)}</span> },
+            { title: '创建', width: 110, render: (_, pl) => <span className="dim" style={{ fontSize: 12 }}>{fmtT(pl.created_at)}</span> },
             {
               title: '操作',
-              width: 170,
+              width: 226,
               render: (_, pl) => (
                 <Space size={4}>
                   <Button size="small" type="primary" ghost icon={<PlayCircleOutlined />} onClick={() => setRunPipeline(pl)}>
                     运行
+                  </Button>
+                  <Button size="small" icon={<ScheduleOutlined />} onClick={() => setEditSched(pl)}>
+                    改调度
                   </Button>
                   <Popconfirm
                     title="删除流水线?"
@@ -190,20 +236,156 @@ export default function ProjectDetail() {
               ),
             },
             {
+              title: '形态',
+              width: 122,
+              render: (_, t) => {
+                if (!t.pipeline_id) return <span className="dim" style={{ fontSize: 12 }}>—</span>;
+                const pl = pplById.get(t.pipeline_id);
+                if (pl) return <Tag>{pipelineKindLabel(pl.kind)}</Tag>;
+                return <Tag style={{ opacity: 0.6 }}>run(流水线已删)</Tag>;
+              },
+            },
+            {
               title: '意图',
               ellipsis: true,
               render: (_, t) => <span className="dim" style={{ fontSize: 12 }}>{t.description || '—'}</span>,
             },
-            { title: '状态', width: 110, render: (_, t) => <StatusTag preset={taskStatusPreset(t.status)} label={taskStatusLabel(t.status)} /> },
-            { title: '风险', width: 80, render: (_, t) => <RiskText risk={t.risk} /> },
-            { title: '回合', width: 80, render: (_, t) => <span className="mono dim">{t.round_no}</span> },
-            { title: '开始', width: 120, render: (_, t) => <span className="dim" style={{ fontSize: 12 }}>{fmtT(t.created_at)}</span> },
+            { title: '状态', width: 104, render: (_, t) => <StatusTag preset={taskStatusPreset(t.status)} label={taskStatusLabel(t.status)} /> },
+            { title: '风险', width: 76, render: (_, t) => <RiskText risk={t.risk} /> },
+            {
+              title: '裁决(巡检)',
+              width: 212,
+              render: (_, t) => <PatrolVerdictCell task={t} onOpen={() => setRepTask(t)} />,
+            },
+            { title: '开始', width: 110, render: (_, t) => <span className="dim" style={{ fontSize: 12 }}>{fmtT(t.created_at)}</span> },
           ]}
         />
       </Card>
 
       <PipelineCreateModal open={createOpen} projectId={projectId} onClose={() => setCreateOpen(false)} onDone={bump} />
       <PipelineRunModal open={!!runPipeline} pipeline={runPipeline} onClose={() => setRunPipeline(null)} onDone={bump} />
+      <PipelineScheduleModal open={!!editSched} pipeline={editSched} onClose={() => setEditSched(null)} onDone={bump} />
+      <PatrolReportModal task={repTask} projectId={projectId} onClose={() => setRepTask(null)} />
     </div>
+  );
+}
+
+// ---- 裁决列 ----
+
+function PatrolVerdictCell({ task, onOpen }: { task: Task; onOpen: () => void }) {
+  const v = task.status === 'completed' ? parsePatrolResult(task.result) : null;
+  if (!v) {
+    // 非巡检产物(非 completed 或 result 无 patrol: 前缀)→ 无裁决可看。
+    return <span className="dim" style={{ fontSize: 12 }}>—</span>;
+  }
+  return (
+    <Space size={6} wrap>
+      <Tag color={v.ok ? 'success' : 'error'} style={{ marginInlineEnd: 0 }}>
+        {v.ok ? '通过' : `发现 · ${v.severity}`}
+      </Tag>
+      <Tag color={v.action === 'fix' ? 'processing' : 'default'} style={{ marginInlineEnd: 0 }}>
+        {v.action === 'fix' ? '自动处置(fix)' : v.action === 'none' ? '仅通知' : v.action}
+      </Tag>
+      <Button size="small" type="link" icon={<FileTextOutlined />} onClick={onOpen} style={{ paddingInline: 4 }}>
+        查看报告
+      </Button>
+    </Space>
+  );
+}
+
+// ---- 报告抽屉(受控读端点 GET /projects/{id}/patrol/{taskID};纯文本,限长截断带标记) ----
+
+function PatrolReportModal({ task, projectId, onClose }: { task: Task | null; projectId: string; onClose: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [rep, setRep] = useState<PatrolReport | null>(null);
+
+  useEffect(() => {
+    if (!task) return;
+    let live = true;
+    setLoading(true);
+    setErr(null);
+    setRep(null);
+    getPatrolReport(projectId, task.id)
+      .then((r) => {
+        if (live) setRep(r);
+      })
+      .catch((e) => {
+        if (live) setErr(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [task, projectId]);
+
+  const v = task ? parsePatrolResult(task.result) : null;
+
+  return (
+    <Modal
+      open={!!task}
+      onCancel={onClose}
+      footer={
+        <Button type="primary" onClick={onClose}>
+          关闭
+        </Button>
+      }
+      title={task ? `巡检报告 · ${task.title}` : '巡检报告'}
+      width={760}
+    >
+      {task && (
+        <div>
+          {v && (
+            <Alert
+              type={v.ok ? 'success' : 'warning'}
+              showIcon
+              style={{ marginBottom: 10 }}
+              message={`裁决:${v.ok ? '通过' : `发现 ${v.severity}`} · 处置:${v.action === 'fix' ? '自动拉起处置链(fix)' : '仅通知(none)'}`}
+              description={<span className="dim">{v.summary}</span>}
+            />
+          )}
+          {loading ? (
+            <Flex justify="center" style={{ padding: 24 }}>
+              <Spin />
+            </Flex>
+          ) : err ? (
+            <Alert type="error" showIcon message="读取报告失败" description={err} />
+          ) : rep ? (
+            <div>
+              <div className="mono dim" style={{ fontSize: 11, marginBottom: 8 }}>
+                {rep.path}
+              </div>
+              {rep.truncated && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 8 }}
+                  message="报告已超过显示上限,正文截断"
+                  description={`后端读端点单文件上限 ${Math.round((64 * 1024) / 1024)} KiB,完整内容见项目目录该文件。`}
+                />
+              )}
+              <pre
+                style={{
+                  maxHeight: 480,
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  margin: 0,
+                  padding: 12,
+                  background: 'var(--bg-2, rgba(127,127,127,0.06))',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  lineHeight: 1.6,
+                }}
+              >
+                {rep.content || '(空正文)'}
+              </pre>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </Modal>
   );
 }

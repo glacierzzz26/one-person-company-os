@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/glacierzzz26/one-person-company-os/internal/console"
 	"github.com/glacierzzz26/one-person-company-os/internal/github"
 	osrepo "github.com/glacierzzz26/one-person-company-os/internal/repo"
+	"github.com/glacierzzz26/one-person-company-os/internal/schedule"
 	"github.com/glacierzzz26/one-person-company-os/internal/service"
 	"github.com/glacierzzz26/one-person-company-os/internal/settings"
 	"github.com/go-chi/chi/v5"
@@ -41,6 +43,11 @@ type Server struct {
 	masterKeyPath string
 
 	queueInterval time.Duration // 队列认领循环间隔(0 = 关闭;--queue-work 开启)
+
+	// schedulePoll 流水线到点触发轮询间隔(0 = 关闭;schedule_poll_sec)。scheduleNext(pipelineID → 下次命中)
+	// 归 ScheduleLoop/scheduleOnce 单协程所有(触发与执行解耦:只建单,执行由 queue-work 消费)。
+	schedulePoll time.Duration
+	scheduleNext map[string]time.Time
 }
 
 // SetMasterKeyPath 配置 /setup 主密钥落盘路径(<dbPath>.key)。CLI os server 在开库后注入。
@@ -52,6 +59,102 @@ func (s *Server) SetQueueWork(d time.Duration) { s.queueInterval = d }
 
 // QueueWorkEnabled 队列循环是否开启(CLI 启动日志用)。
 func (s *Server) QueueWorkEnabled() bool { return s.queueInterval > 0 }
+
+// SetSchedulePoll 开关流水线到点触发循环:d > 0 = 开启(每 d 扫一次到点流水线并建单);
+// 0 = 关闭。独立总开关(schedule_poll_sec,与 queue_work 正交:只开调度 = 自动拉单不自动干)。
+func (s *Server) SetSchedulePoll(d time.Duration) {
+	s.schedulePoll = d
+	s.scheduleNext = nil // 重置内存态(重启语义;开关切换清空避免陈旧命中)
+}
+
+// ScheduleEnabled 调度循环是否开启(CLI 启动日志用)。
+func (s *Server) ScheduleEnabled() bool { return s.schedulePoll > 0 }
+
+// ScheduleLoop 流水线到点触发循环(Phase 10.2,契约 3.7;独立总开关 schedule_poll_sec)。单协程 tick:
+// 每 d 跑一次 scheduleOnce;scheduleNext 内存态归本循环所有(重启不补历史命中 → 见 scheduleOnce)。
+// 触发与执行解耦:scheduleOnce 只建单,任务执行由 queue-work 消费(文案在 Web 讲清)。
+func (s *Server) ScheduleLoop(ctx context.Context) {
+	if s.schedulePoll <= 0 {
+		log.Printf("schedule dispatch disabled (schedule_poll_sec=0; enable in Settings — auto pulls, queue-work executes)")
+		return
+	}
+	log.Printf("schedule dispatch enabled (interval=%s)", s.schedulePoll)
+	t := time.NewTicker(s.schedulePoll)
+	defer t.Stop()
+	for {
+		s.scheduleOnce(ctx)
+		select {
+		case <-ctx.Done():
+			log.Printf("server schedule loop stopped")
+			return
+		case <-t.C:
+		}
+	}
+}
+
+// scheduleOnce 单 tick(可测;范式同 queueOnce):刷新 ListScheduledPipelines → 判下次命中 →
+// 到点触发 RunPipelineAs(actor=system:schedule)→ 成败均 advance next。删掉的流水线从 map 清理。
+// scheduleNext 无项时用 Next(now) 初始化:重启/首见从未来算起,漏过的本次命中不补(记日志;契约风险节)。
+func (s *Server) scheduleOnce(ctx context.Context) {
+	if ctx.Err() != nil {
+		return
+	}
+	pipes, err := s.svc.ListScheduledPipelines(ctx)
+	if err != nil {
+		log.Printf("schedule: list scheduled pipelines: %v", err)
+		return
+	}
+	if s.scheduleNext == nil {
+		s.scheduleNext = map[string]time.Time{}
+	}
+	seen := make(map[string]bool, len(pipes))
+	now := time.Now()
+	for _, p := range pipes {
+		seen[p.ID] = true
+		c, scheduled, perr := schedule.Parse(p.Schedule)
+		if perr != nil || !scheduled {
+			// 建/改时已校验;脏数据/off 不落此集以外的防御 → 清 map 项并跳过,不触发。
+			delete(s.scheduleNext, p.ID)
+			continue
+		}
+		next, ok := s.scheduleNext[p.ID]
+		if !ok {
+			n := c.Next(now) // 严格晚于 now(本次已过的命中视作错过,不补)
+			if n.IsZero() {
+				log.Printf("schedule: pipeline %s has no future match (cron %q) — not tracked", p.ID, p.Schedule)
+				continue
+			}
+			s.scheduleNext[p.ID] = n
+			continue
+		}
+		if now.Before(next) {
+			continue // 未到点
+		}
+		// 到点触发(单次命中至多触发一次;成败均 advance → 天然去重)。
+		if _, err := s.svc.RunPipelineAs(ctx, p.ID, "", service.ActorSchedule); err != nil {
+			// ErrPipelineBusy/Conflict(同项目他跑在飞)→ 记日志 skip;其它硬错记日志不断流。
+			if errors.Is(err, service.ErrPipelineBusy) || errors.Is(err, service.ErrConflict) {
+				log.Printf("schedule: pipeline %s due but busy/conflict — skip this fire: %v", p.ID, err)
+			} else {
+				log.Printf("schedule: fire pipeline %s: %v", p.ID, err)
+			}
+		} else {
+			log.Printf("schedule: fired pipeline %s (cron %q)", p.ID, p.Schedule)
+		}
+		n := c.Next(next)
+		if n.IsZero() {
+			delete(s.scheduleNext, p.ID)
+		} else {
+			s.scheduleNext[p.ID] = n
+		}
+	}
+	// 已删/停调度的流水线从 map 清理。
+	for id := range s.scheduleNext {
+		if !seen[id] {
+			delete(s.scheduleNext, id)
+		}
+	}
+}
 
 // Initialized /setup 首启是否已完成(console_token_hash != ”;”=未初始化 /setup 开放)。
 // apiAuth 与 /setup 自守卫共用;读 DB 实时态(不缓存,避免初始化后需重启刷新)。

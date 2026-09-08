@@ -85,6 +85,7 @@ export interface Task {
   reviewer_endpoint_id: string | null;
   test_endpoint_id: string | null; // test 判读槽(8.4 分槽;默认 standard 档)
   project_id: string | null; // Phase 10.1:流水线 run 产物挂项目;空 = 非流水线任务
+  pipeline_id: string | null; // Phase 10.2:run 反链流水线(形态/裁决展示);空 = 非流水线 run 产物
   created_at: number;
   updated_at: number;
 }
@@ -362,6 +363,7 @@ export interface CreatePipelineReq {
   kind?: PipelineKind; // 空 = bugfix
   description?: string; // 意图
   risk?: Risk; // 空 = medium
+  schedule?: string; // 10.2:cron 五段 分时日月周;空/off = 不调度
 }
 
 export interface RunPipelineReq {
@@ -374,6 +376,19 @@ export interface RunPipelineResult {
   project_id: string | null;
   pipeline_id: string;
   task: Task;
+}
+
+// PUT /pipelines/{id} 改调度请求/响应:schedule 空/off = 停调度(非法 cron → 400)。
+export interface UpdatePipelineScheduleReq {
+  schedule: string;
+}
+
+// GET /projects/{projectID}/patrol/{taskID} 巡检报告正文读端点响应(仅已完成 patrol run 可读)。
+export interface PatrolReport {
+  task_id: string;
+  path: string; // 相对项目根 patrol/<taskID>.md
+  truncated: boolean; // 超 64KiB 截断标记
+  content: string; // 纯文本正文(限长)
 }
 
 // ===================== setup / console token(Phase 9.2)=====================
@@ -410,6 +425,7 @@ export interface GlobalSettings {
   poll_min: number;
   queue_work: boolean;
   queue_interval_sec: number;
+  schedule_poll_sec: number; // 10.2:流水线到点触发轮询间隔(秒;0 = 关,与 queue_work 正交)
   console_token_set: boolean; // 掩码:console_token_hash 非空(初始化已设令牌)
   updated_at: number;
 }
@@ -422,6 +438,7 @@ export interface UpdateGlobalSettingsReq {
   poll_min?: number;
   queue_work?: boolean;
   queue_interval_sec?: number;
+  schedule_poll_sec?: number; // >=0;0 = 关
 }
 
 // company 覆盖行:指针字段 null = 继承 global(无覆盖行 = 全 null)。与后端 CompanySetting 对齐。

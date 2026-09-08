@@ -18,12 +18,13 @@ type serverConfig struct {
 	QueueIntervalSec int    // 队列认领间隔(秒,仅 queue_work 开时用)
 	QueueWork        bool   // 是否自消费任务队列
 	Digest           string // "HH:MM" 摘要时刻;"" = 关(off)
+	SchedulePollSec  int    // 流水线到点触发轮询间隔(秒;0 = 关,与 queue_work 正交)
 }
 
 // serverConfigFromApp 由 DB app_setting 行求 os server 生效配置(9.4 决策③:无 flag 覆盖)。
 // svc.AppSetting 缺行已回内置默认(9.1),零值填默认保留为防御(手工零列行);digest 归一化
 // "" / "off" → "" = 关(SetDigestTime 语义);digest 格式("HH:MM")交给 server.SetDigestTime 判。
-// 范围防护(越界 → error,boot 清晰报错不静默):port∈[1,65535]、poll≥1、interval≥1。
+// 范围防护(越界 → error,boot 清晰报错不静默):port∈[1,65535]、poll≥1、interval≥1、schedule_poll≥0。
 func serverConfigFromApp(app settings.AppSetting) (serverConfig, error) {
 	cfg := serverConfig{
 		HTTPPort:         app.HTTPPort,
@@ -31,6 +32,7 @@ func serverConfigFromApp(app settings.AppSetting) (serverConfig, error) {
 		QueueWork:        app.QueueWork,
 		QueueIntervalSec: app.QueueIntervalSec,
 		Digest:           app.DigestTime,
+		SchedulePollSec:  app.SchedulePollSec,
 	}
 	if cfg.HTTPPort == 0 {
 		cfg.HTTPPort = settings.DefaultHTTPPort
@@ -53,6 +55,9 @@ func serverConfigFromApp(app settings.AppSetting) (serverConfig, error) {
 	}
 	if cfg.QueueIntervalSec < 1 {
 		return serverConfig{}, fmt.Errorf("queue_interval_sec must be >= 1 (got %d)", cfg.QueueIntervalSec)
+	}
+	if cfg.SchedulePollSec < 0 {
+		return serverConfig{}, fmt.Errorf("schedule_poll_sec must be >= 0 (0 = scheduling off; got %d)", cfg.SchedulePollSec)
 	}
 	return cfg, nil
 }

@@ -24,6 +24,7 @@ import type {
   Memory,
   ModelInfo,
   Overview,
+  PatrolReport,
   Pipeline,
   Project,
   Repo,
@@ -39,6 +40,7 @@ import type {
   Task,
   UpdateCompanySettingsReq,
   UpdateGlobalSettingsReq,
+  UpdatePipelineScheduleReq,
   Workflow,
 } from './types';
 
@@ -143,10 +145,15 @@ export const createPipeline = (projectId: string, body: CreatePipelineReq) =>
 export const listProjectTasks = (projectId: string, limit = 20) =>
   request<Task[]>(`/api/v1/projects/${projectId}/tasks?limit=${limit}`);
 export const getPipeline = (id: string) => request<Pipeline>(`/api/v1/pipelines/${id}`);
+export const updatePipelineSchedule = (id: string, body: UpdatePipelineScheduleReq) =>
+  request<Pipeline>(`/api/v1/pipelines/${id}`, { method: 'PUT', body });
 export const deletePipeline = (id: string) =>
   request<{ id: string; deleted: boolean }>(`/api/v1/pipelines/${id}`, { method: 'DELETE' });
 export const runPipeline = (id: string, body?: RunPipelineReq) =>
   request<RunPipelineResult>(`/api/v1/pipelines/${id}/run`, { method: 'POST', body });
+// 10.2:巡检报告正文读端点(仅已完成 patrol run;正文纯文本,限长截断带 truncated)。
+export const getPatrolReport = (projectId: string, taskId: string) =>
+  request<PatrolReport>(`/api/v1/projects/${projectId}/patrol/${taskId}`);
 
 // ---- setup / console token(Phase 9.2,契约 console-access.md §3.6)----
 export const setupStatus = () => request<SetupStatus>('/api/v1/setup/status');

@@ -122,6 +122,77 @@ func legacyReview(out string) (string, string) {
 	return normalizeReviewVerdict(val), note
 }
 
+// ---- patrol 判读(Phase 10.2;D4:只对 OS 读回的巡检报告证据文本裁决,不信 agent 自述) ----
+
+// patrolVerdict 巡检裁决契约(3.5):{"ok":bool,"severity":"low|medium|high","action":"none"|"fix",
+// "summary":"..","findings":[..]}。ok=true → 绿;非 ok 才看 severity/action(3.6 处置链)。
+type patrolVerdict struct {
+	Ok       bool     `json:"ok"`
+	Severity string   `json:"severity"`
+	Action   string   `json:"action"`
+	Summary  string   `json:"summary"`
+	Findings []string `json:"findings"`
+}
+
+// parsePatrolVerdict 提取巡检裁决。JSON 主契约;无 ok 键 / 整体不可解析 → ok=false(调用方 engFail,不默认绿)。
+// severity 归一 low|medium|high(缺省 low);action 归一 none|fix(缺省 none);summary/findings 原样。
+func parsePatrolVerdict(out string) (patrolVerdict, bool) {
+	var m map[string]json.RawMessage
+	if !decodeJudgeJSON(out, &m) {
+		return patrolVerdict{}, false
+	}
+	raw, hasOK := m["ok"]
+	if !hasOK {
+		return patrolVerdict{}, false
+	}
+	var ok bool
+	if err := json.Unmarshal(raw, &ok); err != nil {
+		return patrolVerdict{}, false
+	}
+	v := patrolVerdict{Ok: ok, Severity: "low", Action: "none"}
+	if s, ok := m["severity"]; ok {
+		var x string
+		if err := json.Unmarshal(s, &x); err == nil {
+			v.Severity = normalizePatrolSeverity(x)
+		}
+	}
+	if a, ok := m["action"]; ok {
+		var x string
+		if err := json.Unmarshal(a, &x); err == nil {
+			v.Action = normalizePatrolAction(x)
+		}
+	}
+	if s, ok := m["summary"]; ok {
+		_ = json.Unmarshal(s, &v.Summary)
+	}
+	if f, ok := m["findings"]; ok {
+		_ = json.Unmarshal(f, &v.Findings)
+	}
+	v.Summary = strings.TrimSpace(v.Summary)
+	if v.Findings == nil {
+		v.Findings = []string{}
+	}
+	return v, true
+}
+
+// normalizePatrolSeverity 归一巡检严重度;未知 → low(护栏,不因模型乱填触发高险处置)。
+func normalizePatrolSeverity(s string) string {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "low", "medium", "high":
+		return strings.ToLower(strings.TrimSpace(s))
+	}
+	return "low"
+}
+
+// normalizePatrolAction 归一处置动作;未知 → none(护栏,链拉仅在显式 fix 且 severity=high)。
+func normalizePatrolAction(a string) string {
+	switch strings.ToLower(strings.TrimSpace(a)) {
+	case "fix", "none":
+		return strings.ToLower(strings.TrimSpace(a))
+	}
+	return "none"
+}
+
 // ---- triage 判读 ----
 
 // parseDisposition 提取 issue 处置 + 附注。JSON 主:`{"disposition":"direct_work|ask|skip|merge","note":".."}`;

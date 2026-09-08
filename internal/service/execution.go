@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/glacierzzz26/one-person-company-os/internal/execution"
+	"github.com/glacierzzz26/one-person-company-os/internal/pipeline"
 	"github.com/glacierzzz26/one-person-company-os/internal/task"
 	"github.com/glacierzzz26/one-person-company-os/internal/tool"
 	"github.com/google/uuid"
@@ -69,8 +70,15 @@ func (s *Service) GetExecution(ctx context.Context, id string) (execution.Execut
 // 需要则置 waiting_approval 不执行;否则做 Tool 权限校验(默认拒绝),未授权则
 // Audit deny 并失败;通过后创建 Execution,在 Tool 沙箱内执行 task.Description。
 // engineering 家族 Task 先分流给 Engineering Driver(回合循环),0-5 语义不变。
+// Phase 10.2:engineering 家族里 run 反链流水线且 kind==ops_patrol → runPatrol(巡检驱动);
+// 流水线已删(sql.ErrNoRows)/kind≠ops_patrol → 落回 runEngineering(默认语义兜底)。
 func (s *Service) runClaimed(ctx context.Context, workerID string, t task.Task) error {
 	if isEngineeringTask(t) {
+		if t.PipelineID != nil {
+			if pl, err := s.store.GetPipeline(ctx, *t.PipelineID); err == nil && pl.Kind == pipeline.KindOpsPatrol {
+				return s.runPatrol(ctx, workerID, t, pl)
+			}
+		}
 		return s.runEngineering(ctx, workerID, t)
 	}
 	if need, reason, err := s.needsApproval(ctx, t); err != nil {

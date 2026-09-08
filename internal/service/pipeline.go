@@ -7,17 +7,26 @@ import (
 	"time"
 
 	"github.com/glacierzzz26/one-person-company-os/internal/pipeline"
+	"github.com/glacierzzz26/one-person-company-os/internal/schedule"
 	"github.com/glacierzzz26/one-person-company-os/internal/task"
 	"github.com/google/uuid"
 )
 
-func (s *Service) CreatePipeline(ctx context.Context, projectID, name, kind, description, risk string) (pipeline.Pipeline, error) {
-	return s.CreatePipelineAs(ctx, projectID, name, kind, description, risk, "human:cli")
+// 内部 actor(审计 actor 无格式锁,10.1 human:* 之外 system:* 合法;Web 鉴权按 path 不含 actor 判定)。
+const (
+	// ActorSchedule 是 schedule 调度循环到点触发的审计 actor(契约 3.7;server ScheduleLoop 用它跑单)。
+	ActorSchedule = "system:schedule"
+	actorChain    = "system:patrol_chain" // 巡检发现处置链:非 ok+high+fix → 链拉同项目 bugfix run
+)
+
+func (s *Service) CreatePipeline(ctx context.Context, projectID, name, kind, description, risk, schedule string) (pipeline.Pipeline, error) {
+	return s.CreatePipelineAs(ctx, projectID, name, kind, description, risk, schedule, "human:cli")
 }
 
 // CreatePipelineAs 建流水线(绑 project):kind ∈ 白名单(空 → bugfix;非法 → ErrInvalid)、
-// risk 归一到 low/medium/high(缺省 medium)。重名 → ErrConflict。
-func (s *Service) CreatePipelineAs(ctx context.Context, projectID, name, kind, description, risk, actor string) (pipeline.Pipeline, error) {
+// risk 归一到 low/medium/high(缺省 medium)、schedule cron 五段校验(空/off = 不调度;
+// 非法 → ErrInvalid)。重名 → ErrConflict。schedule 存原文(10.2 起解析;服务器调度层遇非调度跳过)。
+func (s *Service) CreatePipelineAs(ctx context.Context, projectID, name, kind, description, risk, schedRaw, actor string) (pipeline.Pipeline, error) {
 	if projectID == "" || name == "" {
 		return pipeline.Pipeline{}, fmt.Errorf("%w: --project and --name are required", ErrInvalid)
 	}
@@ -37,11 +46,15 @@ func (s *Service) CreatePipelineAs(ctx context.Context, projectID, name, kind, d
 	if !pipeline.ValidRisk(risk) {
 		return pipeline.Pipeline{}, fmt.Errorf("%w: invalid risk %q (low|medium|high)", ErrInvalid, risk)
 	}
+	sched, err := normalizeSchedule(schedRaw)
+	if err != nil {
+		return pipeline.Pipeline{}, err
+	}
 	now := time.Now().Unix()
 	p := pipeline.Pipeline{
 		ID: uuid.NewString(), ProjectID: projectID, Name: name, Kind: kind,
 		Description: description, Risk: risk, Status: pipeline.StatusActive,
-		Schedule: "", CreatedAt: now, UpdatedAt: now,
+		Schedule: sched, CreatedAt: now, UpdatedAt: now,
 	}
 	created, err := s.store.CreatePipeline(ctx, p)
 	if err != nil {
@@ -52,6 +65,18 @@ func (s *Service) CreatePipelineAs(ctx context.Context, projectID, name, kind, d
 	}
 	_, err = s.audit(ctx, "pipeline", created.ID, "create", actor, kind+" "+name)
 	return created, err
+}
+
+// normalizeSchedule 校验 schedule(5 段数字 cron;契约 3.5 子集)并返回待存原文(trimmed):
+// ""/off = 不调度(合法);非法 → ErrInvalid 带指引。存储原文,解析(判下次命中/是否到点)在服务器调度层。
+func normalizeSchedule(raw string) (string, error) {
+	s := strings.TrimSpace(raw)
+	if _, scheduled, err := schedule.Parse(s); err != nil {
+		return "", fmt.Errorf("%w: invalid schedule %q — use 5-field numeric cron `min hour dom month dow` like \"0 9 * * *\" (daily 09:00) / \"0 9 * * 1-5\" (weekdays 09:00); empty or \"off\" disables", ErrInvalid, s)
+	} else if !scheduled {
+		return s, nil // 空/off → 存原文,不调度
+	}
+	return s, nil
 }
 
 func (s *Service) GetPipeline(ctx context.Context, id string) (pipeline.Pipeline, error) {
@@ -73,11 +98,40 @@ func (s *Service) DeletePipelineAs(ctx context.Context, id, actor string) error 
 	if err != nil {
 		return err
 	}
+	// Phase 10.2:先断 task 反链(pipeline_id FK ON),run 历史任务保留(同 project 语义)。
+	if _, err := s.store.ClearTaskPipeline(ctx, id); err != nil {
+		return err
+	}
 	if _, err := s.store.DeletePipeline(ctx, id); err != nil {
 		return err
 	}
 	_, err = s.audit(ctx, "pipeline", id, "delete", actor, p.Name)
 	return err
+}
+
+// UpdatePipelineScheduleAs 改流水线调度(cron 校验同建;空/off = 停调度)。审计 detail 记 old → new。
+// 契约 3.4:Web 作者面(改调度 Modal)/HTTP PUT 的唯一写口;不存在的流水线 → sql.ErrNoRows(HTTP 404)。
+func (s *Service) UpdatePipelineScheduleAs(ctx context.Context, id, schedRaw, actor string) (pipeline.Pipeline, error) {
+	sched, err := normalizeSchedule(schedRaw)
+	if err != nil {
+		return pipeline.Pipeline{}, err
+	}
+	old, err := s.store.GetPipeline(ctx, id)
+	if err != nil {
+		return pipeline.Pipeline{}, err
+	}
+	updated, err := s.store.UpdatePipelineSchedule(ctx, id, sched)
+	if err != nil {
+		return pipeline.Pipeline{}, err
+	}
+	_, err = s.audit(ctx, "pipeline", id, "edit", actor, "schedule "+old.Schedule+" → "+updated.Schedule)
+	return updated, err
+}
+
+// ListScheduledPipelines 调度循环取数:active 且 schedule 非空(供 server ScheduleLoop 判下次命中;
+// 契约 3.7;schedule 由建/改时校验过,off/空不落此集以外,解析判停仍以服务器 parse 为准)。
+func (s *Service) ListScheduledPipelines(ctx context.Context) ([]pipeline.ScheduledPipeline, error) {
+	return s.store.ListScheduledPipelines(ctx)
 }
 
 // RunPipelineAs 触发一次流水线 run = 在项目 root 目录建一条 engineering task
@@ -122,6 +176,7 @@ func (s *Service) RunPipelineAs(ctx context.Context, pipelineID, request, actor 
 		Risk:        pl.Risk,
 		Workspace:   prj.RootPath,
 		ProjectID:   &prj.ID,
+		PipelineID:  &pl.ID,
 		MaxAttempts: 1,
 	}, actor)
 	if err != nil {

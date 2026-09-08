@@ -21,7 +21,7 @@ func TestD1ServerConfigFromApp(t *testing.T) {
 	}
 	if cfg.HTTPPort != settings.DefaultHTTPPort || cfg.PollMin != settings.DefaultPollMin ||
 		cfg.QueueIntervalSec != settings.DefaultQueueIntervalSec || cfg.QueueWork ||
-		cfg.Digest != "" { // 零值 DigestTime="" → 关(非 09:00;默认时刻由 DefaultAppSetting 行携带)
+		cfg.Digest != "" || cfg.SchedulePollSec != settings.DefaultSchedulePollSec { // 零值 DigestTime="" → 关;schedule 缺省 0=关
 		t.Fatalf("zero-row config = %+v", cfg)
 	}
 
@@ -36,13 +36,14 @@ func TestD1ServerConfigFromApp(t *testing.T) {
 		t.Fatalf("defaults config = %+v", cfg)
 	}
 
-	// DB 行值生效:port/poll/queue 全被行值驱动;digest_time="" = 关。
-	app := settings.AppSetting{HTTPPort: 9001, PollMin: 3, QueueWork: true, QueueIntervalSec: 25, DigestTime: ""}
+	// DB 行值生效:port/poll/queue/schedule 全被行值驱动;digest_time="" = 关。
+	app := settings.AppSetting{HTTPPort: 9001, PollMin: 3, QueueWork: true, QueueIntervalSec: 25, DigestTime: "", SchedulePollSec: 30}
 	cfg, err = serverConfigFromApp(app)
 	if err != nil {
 		t.Fatalf("db-row config: %v", err)
 	}
-	if cfg.HTTPPort != 9001 || cfg.PollMin != 3 || !cfg.QueueWork || cfg.QueueIntervalSec != 25 || cfg.Digest != "" {
+	if cfg.HTTPPort != 9001 || cfg.PollMin != 3 || !cfg.QueueWork || cfg.QueueIntervalSec != 25 ||
+		cfg.Digest != "" || cfg.SchedulePollSec != 30 {
 		t.Fatalf("db-row config = %+v", cfg)
 	}
 
@@ -72,12 +73,15 @@ func TestD2ServerConfigFromAppBounds(t *testing.T) {
 		{"port -1", settings.AppSetting{HTTPPort: -1}, "http_port"},
 		{"poll -1", settings.AppSetting{PollMin: -1}, "poll_min"},
 		{"interval -1", settings.AppSetting{QueueIntervalSec: -1}, "queue_interval_sec"},
+		{"schedule -1", settings.AppSetting{SchedulePollSec: -1}, "schedule_poll_sec"},
 		// 0 = 内置默认,不越界;合法边界通过。
 		{"port 0 zero-fill default", settings.AppSetting{}, ""},
 		{"port 1 ok", settings.AppSetting{HTTPPort: 1}, ""},
 		{"port 65535 ok", settings.AppSetting{HTTPPort: 65535}, ""},
 		{"poll 1 ok", settings.AppSetting{PollMin: 1}, ""},
 		{"interval 1 ok", settings.AppSetting{QueueIntervalSec: 1}, ""},
+		{"schedule 0 ok (off)", settings.AppSetting{SchedulePollSec: 0}, ""},
+		{"schedule 30 ok", settings.AppSetting{SchedulePollSec: 30}, ""},
 	}
 	for _, c := range cases {
 		_, err := serverConfigFromApp(c.app)

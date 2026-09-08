@@ -140,3 +140,74 @@ func (q *Queries) ListPipelinesByProject(ctx context.Context, projectID string) 
 	}
 	return items, nil
 }
+
+const listScheduledPipelines = `-- name: ListScheduledPipelines :many
+SELECT id, project_id, name, kind, schedule FROM pipelines
+WHERE status = 'active' AND schedule != ''
+ORDER BY created_at ASC
+`
+
+type ListScheduledPipelinesRow struct {
+	ID        string `json:"id"`
+	ProjectID string `json:"project_id"`
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	Schedule  string `json:"schedule"`
+}
+
+func (q *Queries) ListScheduledPipelines(ctx context.Context) ([]ListScheduledPipelinesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listScheduledPipelines)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListScheduledPipelinesRow{}
+	for rows.Next() {
+		var i ListScheduledPipelinesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Name,
+			&i.Kind,
+			&i.Schedule,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updatePipelineSchedule = `-- name: UpdatePipelineSchedule :one
+UPDATE pipelines SET schedule = ?, updated_at = ? WHERE id = ? RETURNING id, project_id, name, kind, description, risk, status, schedule, created_at, updated_at
+`
+
+type UpdatePipelineScheduleParams struct {
+	Schedule  string `json:"schedule"`
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) UpdatePipelineSchedule(ctx context.Context, arg UpdatePipelineScheduleParams) (Pipeline, error) {
+	row := q.db.QueryRowContext(ctx, updatePipelineSchedule, arg.Schedule, arg.UpdatedAt, arg.ID)
+	var i Pipeline
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Kind,
+		&i.Description,
+		&i.Risk,
+		&i.Status,
+		&i.Schedule,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

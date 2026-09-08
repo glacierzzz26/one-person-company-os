@@ -75,6 +75,7 @@ func (s *Server) apiCreatePipeline(w http.ResponseWriter, r *http.Request) {
 		Kind        string `json:"kind"`
 		Description string `json:"description"`
 		Risk        string `json:"risk"`
+		Schedule    string `json:"schedule"` // 10.2:cron 五段;空/off = 不调度
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -83,7 +84,7 @@ func (s *Server) apiCreatePipeline(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, http.StatusBadRequest, "bad_request", "project_id and name are required")
 		return
 	}
-	p, err := s.svc.CreatePipelineAs(r.Context(), pathParam(r, "id"), req.Name, req.Kind, req.Description, req.Risk, consoleActor)
+	p, err := s.svc.CreatePipelineAs(r.Context(), pathParam(r, "id"), req.Name, req.Kind, req.Description, req.Risk, req.Schedule, consoleActor)
 	if err != nil {
 		handleServiceErr(w, err)
 		return

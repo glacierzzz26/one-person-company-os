@@ -28,6 +28,7 @@ type AppSetting struct {
 	PollMin           int64  `json:"poll_min"`
 	QueueWork         int64  `json:"queue_work"`
 	QueueIntervalSec  int64  `json:"queue_interval_sec"`
+	SchedulePollSec   int64  `json:"schedule_poll_sec"`
 	UpdatedAt         int64  `json:"updated_at"`
 }
 
@@ -235,6 +236,7 @@ type Task struct {
 	ReviewerEndpointID sql.NullString `json:"reviewer_endpoint_id"`
 	TestEndpointID     sql.NullString `json:"test_endpoint_id"`
 	ProjectID          sql.NullString `json:"project_id"`
+	PipelineID         sql.NullString `json:"pipeline_id"`
 	CreatedAt          int64          `json:"created_at"`
 	UpdatedAt          int64          `json:"updated_at"`
 }

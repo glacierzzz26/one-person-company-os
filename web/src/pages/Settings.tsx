@@ -277,6 +277,7 @@ interface ServerVals {
   queue_interval_sec: number | null;
   queue_work: boolean;
   digest_time: string;
+  schedule_poll_sec: number | null;
 }
 
 function ServerParamsCard({ gs }: { gs: GlobalSettings }) {
@@ -294,6 +295,7 @@ function ServerParamsCard({ gs }: { gs: GlobalSettings }) {
         queue_interval_sec: Number(v.queue_interval_sec),
         queue_work: v.queue_work,
         digest_time: (v.digest_time ?? '').trim(),
+        schedule_poll_sec: v.schedule_poll_sec == null ? 0 : Math.max(0, Number(v.schedule_poll_sec)),
       };
       await updateGlobalSettings(body);
       message.success('Server 参数已保存 —— 重启 os server 生效');
@@ -324,6 +326,7 @@ function ServerParamsCard({ gs }: { gs: GlobalSettings }) {
           queue_interval_sec: gs.queue_interval_sec,
           queue_work: gs.queue_work,
           digest_time: gs.digest_time || '',
+          schedule_poll_sec: gs.schedule_poll_sec,
         }}
       >
         <Form.Item
@@ -355,6 +358,14 @@ function ServerParamsCard({ gs }: { gs: GlobalSettings }) {
         </Form.Item>
         <Form.Item name="digest_time" label="每日摘要时刻" extra={'留空/"off" = 关;否则 HH:MM'}>
           <Input placeholder="09:00" allowClear />
+        </Form.Item>
+        <Form.Item
+          name="schedule_poll_sec"
+          label="流水线定时调度轮询间隔(秒,0 = 关)"
+          rules={[{ required: true, message: '必填' }]}
+          extra={'调度总开关:>0 时到点 cron 自动拉单(system:schedule);0 = 关。与 queue_work 正交:只开调度 = 拉单不自动执行,执行仍需后台队列。'}
+        >
+          <InputNumber min={0} style={{ width: '100%' }} placeholder="0 = 关" />
         </Form.Item>
         <Button type="primary" htmlType="submit" loading={busy}>
           保存

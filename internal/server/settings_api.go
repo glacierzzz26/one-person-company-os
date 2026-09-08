@@ -38,6 +38,7 @@ type globalSettingsDTO struct {
 	PollMin           int    `json:"poll_min"`
 	QueueWork         bool   `json:"queue_work"`
 	QueueIntervalSec  int    `json:"queue_interval_sec"`
+	SchedulePollSec   int    `json:"schedule_poll_sec"` // 10.2:流水线到点触发轮询间隔(秒;0=关)——回包必须回显,Web 设置行依赖
 	ConsoleTokenSet   bool   `json:"console_token_set"`
 	UpdatedAt         int64  `json:"updated_at"`
 }
@@ -51,6 +52,7 @@ func toGlobalSettingsDTO(a settings.AppSetting) globalSettingsDTO {
 		PollMin:           a.PollMin,
 		QueueWork:         a.QueueWork,
 		QueueIntervalSec:  a.QueueIntervalSec,
+		SchedulePollSec:   a.SchedulePollSec,
 		ConsoleTokenSet:   a.ConsoleTokenHash != "",
 		UpdatedAt:         a.UpdatedAt,
 	}

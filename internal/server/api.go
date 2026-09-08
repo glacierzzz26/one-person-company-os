@@ -123,8 +123,10 @@ func (s *Server) registerAPIRoutes(r chi.Router) {
 	r.Delete("/projects/{id}", s.apiDeleteProject)
 	r.Get("/projects/{id}/pipelines", s.apiListPipelines)
 	r.Post("/projects/{id}/pipelines", s.apiCreatePipeline)
-	r.Get("/projects/{id}/tasks", s.apiListProjectTasks) // 最近 runs(复用 ListTasksByProject)
+	r.Get("/projects/{id}/tasks", s.apiListProjectTasks)                 // 最近 runs(复用 ListTasksByProject)
+	r.Get("/projects/{projectID}/patrol/{taskID}", s.apiGetPatrolReport) // 10.2:巡检报告正文读端点
 	r.Get("/pipelines/{id}", s.apiGetPipeline)
+	r.Put("/pipelines/{id}", s.apiUpdatePipelineSchedule) // 10.2:改调度(cron 作者面 Web/HTTP)
 	r.Delete("/pipelines/{id}", s.apiDeletePipeline)
 	r.Post("/pipelines/{id}/run", s.apiRunPipeline)
 

@@ -49,6 +49,33 @@ func (s *Store) DeletePipelinesByProject(ctx context.Context, projectID string) 
 	return s.q.DeletePipelinesByProject(ctx, projectID)
 }
 
+// UpdatePipelineSchedule 更新流水线 schedule(原文落库);返回更新后整行。
+func (s *Store) UpdatePipelineSchedule(ctx context.Context, id, schedule string) (pipeline.Pipeline, error) {
+	row, err := s.q.UpdatePipelineSchedule(ctx, query.UpdatePipelineScheduleParams{
+		Schedule: schedule, UpdatedAt: now(), ID: id,
+	})
+	if err != nil {
+		return pipeline.Pipeline{}, err
+	}
+	return toPipeline(row), nil
+}
+
+// ListScheduledPipelines 返回全部 active 且 schedule 非空的流水线子集(供 server 调度轮询)。
+// Phase 10.2:schedule 由 service 层校验过合法(空串 = 不调度,不落进此集)。
+func (s *Store) ListScheduledPipelines(ctx context.Context) ([]pipeline.ScheduledPipeline, error) {
+	rows, err := s.q.ListScheduledPipelines(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]pipeline.ScheduledPipeline, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, pipeline.ScheduledPipeline{
+			ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Kind: r.Kind, Schedule: r.Schedule,
+		})
+	}
+	return out, nil
+}
+
 func toPipeline(r query.Pipeline) pipeline.Pipeline {
 	return pipeline.Pipeline{
 		ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Kind: r.Kind,

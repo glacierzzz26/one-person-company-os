@@ -39,7 +39,7 @@ func mustCreateProject(t *testing.T, svc *Service, compID, name, dir string) pro
 
 func mustCreatePipeline(t *testing.T, svc *Service, prjID, name, kind, risk string) pipeline.Pipeline {
 	t.Helper()
-	pl, err := svc.CreatePipeline(context.Background(), prjID, name, kind, "intent "+name, risk)
+	pl, err := svc.CreatePipeline(context.Background(), prjID, name, kind, "intent "+name, risk, "")
 	if err != nil {
 		t.Fatalf("CreatePipeline(%s): %v", name, err)
 	}
@@ -157,18 +157,18 @@ func TestP6P7PipelineCreateAndList(t *testing.T) {
 	mustCreatePipeline(t, svc, prjA.ID, "patrol-daily", pipeline.KindOpsPatrol, pipeline.RiskLow)
 
 	// 非法 kind / 非法 risk → ErrInvalid。
-	if _, err := svc.CreatePipeline(ctx, prjA.ID, "bad-kind", "k8s", "", "medium"); !errors.Is(err, ErrInvalid) {
+	if _, err := svc.CreatePipeline(ctx, prjA.ID, "bad-kind", "k8s", "", "medium", ""); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("P6 invalid kind want ErrInvalid, got %v", err)
 	}
-	if _, err := svc.CreatePipeline(ctx, prjA.ID, "bad-risk", pipeline.KindBugfix, "", "extreme"); !errors.Is(err, ErrInvalid) {
+	if _, err := svc.CreatePipeline(ctx, prjA.ID, "bad-risk", pipeline.KindBugfix, "", "extreme", ""); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("P6 invalid risk want ErrInvalid, got %v", err)
 	}
 	// 重名流水线(同 project)→ ErrConflict。
-	if _, err := svc.CreatePipeline(ctx, prjA.ID, "fix-login", pipeline.KindBugfix, "", "medium"); !errors.Is(err, ErrConflict) {
+	if _, err := svc.CreatePipeline(ctx, prjA.ID, "fix-login", pipeline.KindBugfix, "", "medium", ""); !errors.Is(err, ErrConflict) {
 		t.Fatalf("P6 duplicate pipeline name want ErrConflict, got %v", err)
 	}
 	// 不存在 project → 404(sql.ErrNoRows 冒上)。
-	if _, err := svc.CreatePipeline(ctx, "no-such-project", "x", pipeline.KindBugfix, "", ""); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := svc.CreatePipeline(ctx, "no-such-project", "x", pipeline.KindBugfix, "", "", ""); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("P6 create pipeline in missing project want sql.ErrNoRows, got %v", err)
 	}
 

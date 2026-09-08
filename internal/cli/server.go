@@ -45,6 +45,10 @@ func serverCmd() *cobra.Command {
 			if cfg.QueueWork {
 				srv.SetQueueWork(time.Duration(cfg.QueueIntervalSec) * time.Second)
 			}
+			// 流水线到点触发循环(Phase 10.2,契约 3.7):schedule_poll_sec 独立总开关(>0 才轮询;0 = 关)。
+			if cfg.SchedulePollSec > 0 {
+				srv.SetSchedulePoll(time.Duration(cfg.SchedulePollSec) * time.Second)
+			}
 
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -57,11 +61,12 @@ func serverCmd() *cobra.Command {
 				api = "on (console token)"
 			}
 			// 通知源(9.3 决策②):按公司机密 feishu_webhook 逐公司路由(service.notifyCompany/digest fan-out),无全局 env。
-			fmt.Printf("feishu notify: per-company (company secret feishu_webhook) | daily digest: %s | /api/v1 auth: %s | queue work: %s\n", srv.DigestTime(), api, queueWorkStatus(srv))
+			fmt.Printf("feishu notify: per-company (company secret feishu_webhook) | daily digest: %s | /api/v1 auth: %s | queue work: %s | schedule dispatch: %s\n", srv.DigestTime(), api, queueWorkStatus(srv), scheduleStatus(srv))
 
 			go srv.PollLoop(ctx)
 			go srv.DigestLoop(ctx)
 			go srv.QueueLoop(ctx)
+			go srv.ScheduleLoop(ctx)
 			if digestNow {
 				fmt.Println("sending daily digest now (--digest-now)...")
 				if err := srv.RunDigestNow(ctx); err != nil {
@@ -93,4 +98,12 @@ func queueWorkStatus(srv *server.Server) string {
 		return "on"
 	}
 	return "off (os queue work drains manually)"
+}
+
+// scheduleStatus 启动日志的流水线调度循环状态文本。
+func scheduleStatus(srv *server.Server) string {
+	if srv.ScheduleEnabled() {
+		return "on (schedule_poll_sec>0)"
+	}
+	return "off (set schedule_poll_sec in Settings to auto-pull at cron)"
 }

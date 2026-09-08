@@ -393,6 +393,9 @@ func (s *Service) UpdateGlobalSettingsAs(ctx context.Context, p settings.AppSett
 	if p.QueueIntervalSec != nil && *p.QueueIntervalSec < 1 {
 		return settings.AppSetting{}, settingsBadRequestf("queue_interval_sec must be >= 1")
 	}
+	if p.SchedulePollSec != nil && *p.SchedulePollSec < 0 {
+		return settings.AppSetting{}, settingsBadRequestf("schedule_poll_sec must be >= 0 (0 = scheduling off)")
+	}
 	changed := applyAppSettingPatch(&a, p)
 	if err := s.UpsertAppSetting(ctx, a); err != nil {
 		return settings.AppSetting{}, err
@@ -509,7 +512,8 @@ func validateDigestTime(v string) error {
 
 func appSettingPatchEmpty(p settings.AppSettingPatch) bool {
 	return p.EngineModeDefault == nil && p.AgentCLIDefault == nil && p.DigestTime == nil &&
-		p.HTTPPort == nil && p.PollMin == nil && p.QueueWork == nil && p.QueueIntervalSec == nil
+		p.HTTPPort == nil && p.PollMin == nil && p.QueueWork == nil && p.QueueIntervalSec == nil &&
+		p.SchedulePollSec == nil
 }
 
 func companySettingPatchEmpty(p settings.CompanySettingPatch) bool {
@@ -569,6 +573,10 @@ func applyAppSettingPatch(a *settings.AppSetting, p settings.AppSettingPatch) []
 	if p.QueueIntervalSec != nil {
 		a.QueueIntervalSec = *p.QueueIntervalSec
 		changed = append(changed, "queue_interval_sec")
+	}
+	if p.SchedulePollSec != nil {
+		a.SchedulePollSec = *p.SchedulePollSec
+		changed = append(changed, "schedule_poll_sec")
 	}
 	return changed
 }

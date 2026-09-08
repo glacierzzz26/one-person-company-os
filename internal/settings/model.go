@@ -15,6 +15,7 @@ type AppSetting struct {
 	PollMin           int    `json:"poll_min"`
 	QueueWork         bool   `json:"queue_work"` // 0|1(DB INTEGER;domain 用 bool)
 	QueueIntervalSec  int    `json:"queue_interval_sec"`
+	SchedulePollSec   int    `json:"schedule_poll_sec"` // 10.2:独立调度轮询间隔(秒;0 = 关,与 queue_work 正交)
 	UpdatedAt         int64  `json:"updated_at"`
 }
 
@@ -27,6 +28,7 @@ const (
 	DefaultHTTPPort         = 8787
 	DefaultPollMin          = 5
 	DefaultQueueIntervalSec = 10
+	DefaultSchedulePollSec  = 0 // 独立调度开关缺省关(0;契约 10.2 §3.7,与 queue_work 正交)
 )
 
 // DefaultAppSetting 缺行时的内置默认(service 读 global 生效值用)。UpdatedAt=0 表示未落库。
@@ -39,6 +41,7 @@ func DefaultAppSetting() AppSetting {
 		HTTPPort:          DefaultHTTPPort,
 		PollMin:           DefaultPollMin,
 		QueueIntervalSec:  DefaultQueueIntervalSec,
+		SchedulePollSec:   DefaultSchedulePollSec, // 0 = 关
 	}
 }
 

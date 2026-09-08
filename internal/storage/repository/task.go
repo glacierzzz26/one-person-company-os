@@ -27,6 +27,7 @@ func (s *Store) CreateTask(ctx context.Context, t task.Task) (task.Task, error) 
 		ReviewerEndpointID: ptrToNull(t.ReviewerEndpointID),
 		TestEndpointID:     ptrToNull(t.TestEndpointID),
 		ProjectID:          ptrToNull(t.ProjectID),
+		PipelineID:         ptrToNull(t.PipelineID),
 		CreatedAt:          t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	})
 	if err != nil {
@@ -220,6 +221,7 @@ func toTask(r query.Task) task.Task {
 		ReviewerEndpointID: nullToPtr(r.ReviewerEndpointID),
 		TestEndpointID:     nullToPtr(r.TestEndpointID),
 		ProjectID:          nullToPtr(r.ProjectID),
+		PipelineID:         nullToPtr(r.PipelineID),
 		CreatedAt:          r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }
@@ -261,10 +263,17 @@ func (s *Store) CountActiveTasksByProject(ctx context.Context, projectID string)
 	return cnt, nil
 }
 
-// ClearTaskProject 解除某项目下全部任务的 project 引用(project_id → NULL)。
-// Phase 10.1:删项目先断引用(FK ON),保留任务历史,不级联删任务。
+// ClearTaskProject 解除某项目下全部任务的 project/pipeline 引用(双清 → NULL)。
+// Phase 10.1/10.2:删项目先断引用(FK ON),保留任务历史,不级联删任务。
+// 项目任务的 pipeline 必属本项目(pipeline run 挂同项目 task),故同条 UPDATE 双清。
 func (s *Store) ClearTaskProject(ctx context.Context, projectID string) (int64, error) {
 	return s.q.ClearTaskProject(ctx, ptrToNull(&projectID))
+}
+
+// ClearTaskPipeline 解除某流水线下全部任务的 pipeline 引用(pipeline_id → NULL)。
+// Phase 10.2:删流水线先断引用(FK ON),run 历史任务保留(同 project 语义)。
+func (s *Store) ClearTaskPipeline(ctx context.Context, pipelineID string) (int64, error) {
+	return s.q.ClearTaskPipeline(ctx, ptrToNull(&pipelineID))
 }
 
 func nullToPtr(s sql.NullString) *string {

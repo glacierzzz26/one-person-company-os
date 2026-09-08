@@ -12,6 +12,7 @@ type AppSettingPatch struct {
 	PollMin           *int    `json:"poll_min"`
 	QueueWork         *bool   `json:"queue_work"`
 	QueueIntervalSec  *int    `json:"queue_interval_sec"`
+	SchedulePollSec   *int    `json:"schedule_poll_sec"` // 10.2:0=关;>0 = 轮询秒
 }
 
 // CompanySettingPatch 公司覆盖部分更新。空串 = 清该维度(继承 global/默认);IssueSource=fixture 需

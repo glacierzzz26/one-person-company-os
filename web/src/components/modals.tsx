@@ -13,12 +13,14 @@ import {
   listCapabilities,
   runPipeline,
   selectEndpointModel,
+  updatePipelineSchedule,
 } from '../api/endpoints';
 import type { Capability, DecisionKind, Endpoint, MemoryType, Pipeline, Risk } from '../api/types';
 import { useData } from '../hooks/useApi';
 import { useApp } from '../store/AppContext';
 import { DECISION_KINDS, MEMORY_TYPES } from '../api/types';
 import { decisionKindLabel, memoryTypeLabel } from '../utils/dicts';
+import { validateCron } from '../utils/cron';
 import { parseModelsCache } from '../utils/parseModelsCache';
 
 interface ModalProps {
@@ -369,7 +371,12 @@ export function PipelineCreateModal({
   const { message } = App.useApp();
   const [busy, setBusy] = useState(false);
 
-  const submit = async (v: { kind: Pipeline['kind']; name: string; description?: string; risk?: Risk }) => {
+  const submit = async (v: { kind: Pipeline['kind']; name: string; description?: string; risk?: Risk; schedule?: string }) => {
+    const cron = validateCron(v.schedule ?? '');
+    if (!cron.ok) {
+      message.error(`调度格式不对:${cron.message}`);
+      return;
+    }
     setBusy(true);
     try {
       await createPipeline(projectId, {
@@ -377,6 +384,7 @@ export function PipelineCreateModal({
         kind: v.kind,
         description: v.description,
         risk: v.risk,
+        schedule: cron.value || undefined,
       });
       message.success('流水线已建:run 会在项目目录内建 engineering 任务执行');
       onClose();
@@ -415,10 +423,89 @@ export function PipelineCreateModal({
             ]}
           />
         </Form.Item>
+        <Form.Item
+          name="schedule"
+          label="调度(可选)"
+          extra={'留空 = 不调度;cron 5 段 `分 时 日 月 周`:每天9点 `0 9 * * *` · 工作日9点 `0 9 * * 1-5` · 每30分 `*/30 * * * *`'}
+        >
+          <Input placeholder="0 9 * * *" className="mono" allowClear />
+        </Form.Item>
+        <Alert
+          type="info"
+          showIcon
+          message="到点自动拉起需:设置页开启 定时调度轮询(>0 秒)+ 后台执行(queue work / os queue work)。到点仅自动拉单,不自动干活。"
+          style={{ marginBottom: 12 }}
+        />
         <div style={{ textAlign: 'right' }}>
           <Footer busy={busy} label="创建" onCancel={onClose} />
         </div>
       </Form>
+    </Modal>
+  );
+}
+
+/** 改流水线调度(cron 五段;清空 = 停调度):PUT /pipelines/{id} {schedule} */
+export function PipelineScheduleModal({
+  open,
+  onClose,
+  onDone,
+  pipeline,
+}: ModalProps & { pipeline: Pipeline | null }) {
+  const { message } = App.useApp();
+  const [busy, setBusy] = useState(false);
+  const [value, setValue] = useState('');
+
+  useEffect(() => {
+    if (open) setValue(pipeline?.schedule ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pipeline?.id]);
+
+  const save = async () => {
+    if (!pipeline) return;
+    const cron = validateCron(value);
+    if (!cron.ok) {
+      message.error(`调度格式不对:${cron.message}`);
+      return;
+    }
+    setBusy(true);
+    try {
+      await updatePipelineSchedule(pipeline.id, { schedule: cron.value });
+      message.success(cron.value ? `调度已更新:${cron.value}` : '调度已清除(不再定时)');
+      onClose();
+      onDone();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      title={pipeline ? `改调度 · ${pipeline.name}` : '改调度'}
+      onCancel={onClose}
+      onOk={save}
+      confirmLoading={busy}
+      okText="保存"
+      width={520}
+    >
+      <div className="dim" style={{ fontSize: 12.5, marginBottom: 8 }}>
+        当前:cron 5 段 <span className="mono">{pipeline?.schedule || '(不调度)'}</span>(三种 kind 都支持到点 run = 定时跑一遍意图)。
+      </div>
+      <Input
+        className="mono"
+        placeholder="0 9 * * *"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        allowClear
+      />
+      <Alert
+        type="info"
+        showIcon
+        message="清空 = 停调度。格式:`分 时 日 月 周`(留空/off = 不调度)。到点自动拉起需设置页开启 定时调度轮询,且执行仍需后台队列(queue work)。"
+        style={{ marginTop: 10 }}
+      />
     </Modal>
   );
 }

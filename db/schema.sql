@@ -85,6 +85,7 @@ CREATE TABLE task (
     reviewer_endpoint_id TEXT REFERENCES endpoint(id),
     test_endpoint_id     TEXT REFERENCES endpoint(id),  -- test 判读槽(8.4;默认 standard,与 review 分槽)
     project_id           TEXT REFERENCES projects(id),  -- Phase 10.1:流水线 run 产物挂项目(可空;删项目先断引用)
+    pipeline_id          TEXT REFERENCES pipelines(id), -- Phase 10.2:run 反链流水线(可空;认领判 kind / Web 显形态;删流水线先断引用)
     created_at     INTEGER NOT NULL,
     updated_at     INTEGER NOT NULL
 );
@@ -219,6 +220,7 @@ CREATE TABLE app_setting (
     poll_min            INTEGER NOT NULL DEFAULT 5,
     queue_work          INTEGER NOT NULL DEFAULT 0,             -- 0|1
     queue_interval_sec  INTEGER NOT NULL DEFAULT 10,
+    schedule_poll_sec   INTEGER NOT NULL DEFAULT 0,             -- 10.2 独立调度开关(秒;0=关,与 queue_work 正交)
     updated_at          INTEGER NOT NULL
 );
 

@@ -28,6 +28,8 @@ type TaskParams struct {
 	TestEndpointID     *string // test 判读端点(8.4 分槽);默认 standard(proto=openai)
 	// Phase 10.1:流水线 run 产物挂项目(可空 = 非流水线任务)。删除项目时先断引用,任务本体保留。
 	ProjectID *string
+	// Phase 10.2:run 反链流水线(可空 = 非流水线 run 产物)。worker 认领凭它分流(ops_patrol → runPatrol)。
+	PipelineID *string
 }
 
 func (s *Service) CreateTask(ctx context.Context, p TaskParams) (task.Task, error) {
@@ -77,6 +79,7 @@ func (s *Service) createTask(ctx context.Context, p TaskParams, actor string) (t
 		ReviewerEndpointID: p.ReviewerEndpointID,
 		TestEndpointID:     p.TestEndpointID,
 		ProjectID:          p.ProjectID,
+		PipelineID:         p.PipelineID,
 		CreatedAt:          now, UpdatedAt: now,
 	}
 	created, err := s.store.CreateTask(ctx, t)

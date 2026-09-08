@@ -113,7 +113,8 @@ func appSettingInsertParams(a settings.AppSetting) query.InsertAppSettingParams 
 		ID: a.ID, EngineModeDefault: a.EngineModeDefault, AgentCliDefault: a.AgentCLIDefault,
 		ConsoleTokenHash: a.ConsoleTokenHash, DigestTime: a.DigestTime, HttpPort: int64(a.HTTPPort),
 		PollMin: int64(a.PollMin), QueueWork: boolInt(a.QueueWork), QueueIntervalSec: int64(a.QueueIntervalSec),
-		UpdatedAt: a.UpdatedAt,
+		SchedulePollSec: int64(a.SchedulePollSec),
+		UpdatedAt:       a.UpdatedAt,
 	}
 }
 
@@ -122,7 +123,8 @@ func appSettingUpdateParams(a settings.AppSetting) query.UpdateAppSettingParams 
 		EngineModeDefault: a.EngineModeDefault, AgentCliDefault: a.AgentCLIDefault,
 		ConsoleTokenHash: a.ConsoleTokenHash, DigestTime: a.DigestTime, HttpPort: int64(a.HTTPPort),
 		PollMin: int64(a.PollMin), QueueWork: boolInt(a.QueueWork), QueueIntervalSec: int64(a.QueueIntervalSec),
-		UpdatedAt: a.UpdatedAt, ID: a.ID,
+		SchedulePollSec: int64(a.SchedulePollSec),
+		UpdatedAt:       a.UpdatedAt, ID: a.ID,
 	}
 }
 
@@ -147,7 +149,8 @@ func toAppSetting(r query.AppSetting) settings.AppSetting {
 		ID: r.ID, EngineModeDefault: r.EngineModeDefault, AgentCLIDefault: r.AgentCliDefault,
 		ConsoleTokenHash: r.ConsoleTokenHash, DigestTime: r.DigestTime, HTTPPort: int(r.HttpPort),
 		PollMin: int(r.PollMin), QueueWork: r.QueueWork != 0, QueueIntervalSec: int(r.QueueIntervalSec),
-		UpdatedAt: r.UpdatedAt,
+		SchedulePollSec: int(r.SchedulePollSec),
+		UpdatedAt:       r.UpdatedAt,
 	}
 }
 
