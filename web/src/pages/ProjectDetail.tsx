@@ -180,14 +180,22 @@ export default function ProjectDetail() {
               ),
             },
             {
-              title: '调度',
-              width: 158,
-              render: (_, pl) =>
-                pl.schedule ? (
-                  <span className="mono" style={{ fontSize: 12 }}>{pl.schedule}</span>
-                ) : (
-                  <span className="dim" style={{ fontSize: 12 }}>—</span>
-                ),
+              title: '调度 · 策略',
+              width: 186,
+              render: (_, pl) => (
+                <div>
+                  {pl.schedule ? (
+                    <span className="mono" style={{ fontSize: 12 }}>{pl.schedule}</span>
+                  ) : (
+                    <span className="dim" style={{ fontSize: 12 }}>—</span>
+                  )}
+                  {pl.plan_policy === 'synthesize' ? (
+                    <div>
+                      <span className="pill pill-accent" style={{ fontSize: 11 }}>合成计划</span>
+                    </div>
+                  ) : null}
+                </div>
+              ),
             },
             {
               title: '风险',
@@ -242,11 +250,22 @@ export default function ProjectDetail() {
             },
             {
               title: '形态',
-              width: 122,
+              width: 142,
               render: (_, t) => {
                 if (!t.pipeline_id) return <span className="dim" style={{ fontSize: 12 }}>—</span>;
                 const pl = pplById.get(t.pipeline_id);
-                if (pl) return <Tag>{pipelineKindLabel(pl.kind)}</Tag>;
+                if (pl) {
+                  return (
+                    <div>
+                      <Tag>{pipelineKindLabel(pl.kind)}</Tag>
+                      {pl.plan_policy === 'synthesize' ? (
+                        <div>
+                          <span className="pill pill-accent" style={{ fontSize: 11 }}>合成</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                }
                 return <Tag style={{ opacity: 0.6 }}>run(流水线已删)</Tag>;
               },
             },

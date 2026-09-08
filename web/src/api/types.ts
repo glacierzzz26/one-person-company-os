@@ -256,6 +256,7 @@ export interface Pipeline {
   risk: Risk;
   status: PipelineStatus;
   schedule: string; // 10.2 才解析;本期恒 ''
+  plan_policy: PlanPolicy; // 10.4:adaptive(缺省=执行中生成)| synthesize(合成=frontier 先行合成)
   created_at: number;
   updated_at: number;
 }
@@ -364,7 +365,11 @@ export interface CreatePipelineReq {
   description?: string; // 意图
   risk?: Risk; // 空 = medium
   schedule?: string; // 10.2:cron 五段 分时日月周;空/off = 不调度
+  plan_policy?: PlanPolicy; // 10.4:adaptive(缺省)| synthesize;空 = adaptive
 }
+
+export const PLAN_POLICIES = ['adaptive', 'synthesize'] as const;
+export type PlanPolicy = (typeof PLAN_POLICIES)[number];
 
 export interface RunPipelineReq {
   request?: string; // 本次运行意图;缺省 = pipeline.description
@@ -408,6 +413,7 @@ export interface PlanPhase {
 export interface TaskPlan {
   kind: 'patrol' | 'engineering'; // plan 形态
   materialized: 'upfront' | 'grow'; // 落账时机
+  plan_policy?: PlanPolicy; // 10.4:run 所属流水线 adaptive|synthesize;流水线已删 → 缺省(undefined)
   created_at: number;
   updated_at: number;
   phases: PlanPhase[]; // 有序阶段(seq 升序;grow 计划执行中追加)

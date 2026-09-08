@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/glacierzzz26/one-person-company-os/internal/service"
+	"github.com/glacierzzz26/one-person-company-os/internal/task"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -261,7 +263,8 @@ func (s *Server) apiListTaskExecutions(w http.ResponseWriter, r *http.Request) {
 // 无 plan(非流水线 run / 历史 run)→ data {task_id, plan:null};有 → 阶段列表随 plan 嵌套。
 func (s *Server) apiGetTaskPlan(w http.ResponseWriter, r *http.Request) {
 	taskID := pathParam(r, "id")
-	if _, err := s.svc.GetTask(r.Context(), taskID); err != nil {
+	t, err := s.svc.GetTask(r.Context(), taskID)
+	if err != nil {
 		handleServiceErr(w, err)
 		return
 	}
@@ -278,6 +281,7 @@ func (s *Server) apiGetTaskPlan(w http.ResponseWriter, r *http.Request) {
 	resp.Plan = &planViewResp{
 		Kind:         rp.Kind,
 		Materialized: rp.Materialized,
+		PlanPolicy:   s.pipelinePlanPolicyFor(r.Context(), t), // 10.4:run 的流水线 plan_policy(Web 区分 synthesize 空态)
 		CreatedAt:    rp.CreatedAt,
 		UpdatedAt:    rp.UpdatedAt,
 		Phases:       make([]phaseViewResp, 0, len(phases)),
@@ -292,6 +296,18 @@ func (s *Server) apiGetTaskPlan(w http.ResponseWriter, r *http.Request) {
 	apiOK(w, resp)
 }
 
+// pipelinePlanPolicyFor 取 run 所属流水线的 plan_policy(展示位)。流水线已删/无反链 → 空串。
+func (s *Server) pipelinePlanPolicyFor(ctx context.Context, t task.Task) string {
+	if t.PipelineID == nil {
+		return ""
+	}
+	pl, err := s.svc.GetPipeline(ctx, *t.PipelineID)
+	if err != nil {
+		return ""
+	}
+	return pl.PlanPolicy
+}
+
 // planReadResp 契约 §3.4 响应:task_id 平铺 + plan(可 null = 非流水线 run / 历史 run)。
 type planReadResp struct {
 	TaskID string        `json:"task_id"`
@@ -301,6 +317,7 @@ type planReadResp struct {
 type planViewResp struct {
 	Kind         string          `json:"kind"` // patrol | engineering
 	Materialized string          `json:"materialized"`
+	PlanPolicy   string          `json:"plan_policy"` // 10.4:run 所属流水线 adaptive|synthesize;流水线已删 → ""
 	CreatedAt    int64           `json:"created_at"`
 	UpdatedAt    int64           `json:"updated_at"`
 	Phases       []phaseViewResp `json:"phases"`

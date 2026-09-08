@@ -96,6 +96,10 @@ export const PIPELINE_STATUS_CN: Record<string, string> = { active: '启用', di
 export const pipelineStatusLabel = (s: string): string => PIPELINE_STATUS_CN[s] ?? s;
 export const pipelineStatusPreset = (s: string): Preset => (s === 'active' ? 'success' : 'default');
 
+// 计划策略 plan_policy(Phase 10.4):adaptive(缺省)= 现状 grow 记账; synthesize = frontier 先行合成
+export const PLAN_POLICY_CN: Record<string, string> = { adaptive: '自适应', synthesize: '合成' };
+export const planPolicyLabel = (s: string): string => PLAN_POLICY_CN[s] ?? s;
+
 // ---- run 计划账本(Phase 10.3,契约 §3.5)----
 
 // plan.kind:patrol | engineering(与 pipeline.kind 分流同源)

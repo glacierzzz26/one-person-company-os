@@ -12,7 +12,7 @@ import (
 const createPipeline = `-- name: CreatePipeline :one
 INSERT INTO pipelines (id, project_id, name, kind, description, risk, status, schedule, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, project_id, name, kind, description, risk, status, schedule, created_at, updated_at
+RETURNING id, project_id, name, kind, description, risk, status, schedule, plan_policy, created_at, updated_at
 `
 
 type CreatePipelineParams struct {
@@ -51,6 +51,7 @@ func (q *Queries) CreatePipeline(ctx context.Context, arg CreatePipelineParams) 
 		&i.Risk,
 		&i.Status,
 		&i.Schedule,
+		&i.PlanPolicy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -82,7 +83,7 @@ func (q *Queries) DeletePipelinesByProject(ctx context.Context, projectID string
 }
 
 const getPipeline = `-- name: GetPipeline :one
-SELECT id, project_id, name, kind, description, risk, status, schedule, created_at, updated_at FROM pipelines WHERE id = ?
+SELECT id, project_id, name, kind, description, risk, status, schedule, plan_policy, created_at, updated_at FROM pipelines WHERE id = ?
 `
 
 func (q *Queries) GetPipeline(ctx context.Context, id string) (Pipeline, error) {
@@ -97,6 +98,7 @@ func (q *Queries) GetPipeline(ctx context.Context, id string) (Pipeline, error) 
 		&i.Risk,
 		&i.Status,
 		&i.Schedule,
+		&i.PlanPolicy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -104,7 +106,7 @@ func (q *Queries) GetPipeline(ctx context.Context, id string) (Pipeline, error) 
 }
 
 const listPipelinesByProject = `-- name: ListPipelinesByProject :many
-SELECT id, project_id, name, kind, description, risk, status, schedule, created_at, updated_at FROM pipelines WHERE project_id = ? ORDER BY created_at DESC
+SELECT id, project_id, name, kind, description, risk, status, schedule, plan_policy, created_at, updated_at FROM pipelines WHERE project_id = ? ORDER BY created_at DESC
 `
 
 func (q *Queries) ListPipelinesByProject(ctx context.Context, projectID string) ([]Pipeline, error) {
@@ -125,6 +127,7 @@ func (q *Queries) ListPipelinesByProject(ctx context.Context, projectID string) 
 			&i.Risk,
 			&i.Status,
 			&i.Schedule,
+			&i.PlanPolicy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -184,8 +187,37 @@ func (q *Queries) ListScheduledPipelines(ctx context.Context) ([]ListScheduledPi
 	return items, nil
 }
 
+const setPipelinePlanPolicy = `-- name: SetPipelinePlanPolicy :one
+UPDATE pipelines SET plan_policy = ?, updated_at = ? WHERE id = ? RETURNING id, project_id, name, kind, description, risk, status, schedule, plan_policy, created_at, updated_at
+`
+
+type SetPipelinePlanPolicyParams struct {
+	PlanPolicy string `json:"plan_policy"`
+	UpdatedAt  int64  `json:"updated_at"`
+	ID         string `json:"id"`
+}
+
+func (q *Queries) SetPipelinePlanPolicy(ctx context.Context, arg SetPipelinePlanPolicyParams) (Pipeline, error) {
+	row := q.db.QueryRowContext(ctx, setPipelinePlanPolicy, arg.PlanPolicy, arg.UpdatedAt, arg.ID)
+	var i Pipeline
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Kind,
+		&i.Description,
+		&i.Risk,
+		&i.Status,
+		&i.Schedule,
+		&i.PlanPolicy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updatePipelineSchedule = `-- name: UpdatePipelineSchedule :one
-UPDATE pipelines SET schedule = ?, updated_at = ? WHERE id = ? RETURNING id, project_id, name, kind, description, risk, status, schedule, created_at, updated_at
+UPDATE pipelines SET schedule = ?, updated_at = ? WHERE id = ? RETURNING id, project_id, name, kind, description, risk, status, schedule, plan_policy, created_at, updated_at
 `
 
 type UpdatePipelineScheduleParams struct {
@@ -206,6 +238,7 @@ func (q *Queries) UpdatePipelineSchedule(ctx context.Context, arg UpdatePipeline
 		&i.Risk,
 		&i.Status,
 		&i.Schedule,
+		&i.PlanPolicy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

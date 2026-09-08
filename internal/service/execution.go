@@ -71,12 +71,18 @@ func (s *Service) GetExecution(ctx context.Context, id string) (execution.Execut
 // Audit deny 并失败;通过后创建 Execution,在 Tool 沙箱内执行 task.Description。
 // engineering 家族 Task 先分流给 Engineering Driver(回合循环),0-5 语义不变。
 // Phase 10.2:engineering 家族里 run 反链流水线且 kind==ops_patrol → runPatrol(巡检驱动);
-// 流水线已删(sql.ErrNoRows)/kind≠ops_patrol → 落回 runEngineering(默认语义兜底)。
+// Phase 10.4:kind≠ops_patrol 且 plan_policy==synthesize → runSynthesized(合成驱动,先审后干);
+// 流水线已删(sql.ErrNoRows)/非 ops_patrol/非 synthesize → 落回 runEngineering(默认语义兜底)。
 func (s *Service) runClaimed(ctx context.Context, workerID string, t task.Task) error {
 	if isEngineeringTask(t) {
 		if t.PipelineID != nil {
-			if pl, err := s.store.GetPipeline(ctx, *t.PipelineID); err == nil && pl.Kind == pipeline.KindOpsPatrol {
-				return s.runPatrol(ctx, workerID, t, pl)
+			if pl, err := s.store.GetPipeline(ctx, *t.PipelineID); err == nil {
+				if pl.Kind == pipeline.KindOpsPatrol {
+					return s.runPatrol(ctx, workerID, t, pl)
+				}
+				if pl.PlanPolicy == pipeline.PlanPolicySynthesize {
+					return s.runSynthesized(ctx, workerID, t, pl)
+				}
 			}
 		}
 		return s.runEngineering(ctx, workerID, t)

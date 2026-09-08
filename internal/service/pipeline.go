@@ -20,14 +20,27 @@ const (
 	actorChain    = "system:patrol_chain" // 巡检发现处置链:非 ok+high+fix → 链拉同项目 bugfix run
 )
 
-func (s *Service) CreatePipeline(ctx context.Context, projectID, name, kind, description, risk, schedule string) (pipeline.Pipeline, error) {
-	return s.CreatePipelineAs(ctx, projectID, name, kind, description, risk, schedule, "human:cli")
+// PipelineOpt 建流水线的可选覆写(Phase 10.4 起:plan_policy;签名零改,新增变体走 variadic opts)。
+type PipelineOpt func(*pipelineOptions)
+
+type pipelineOptions struct{ planPolicy string }
+
+// PipelinePlanPolicy 声明流水线计划策略(plan_policy,10.4 触发列)。缺省 = 空 → DB 默认 adaptive
+// (grow 记账,零漂移)。合法性服务层白名单校验(非法 → ErrInvalid,DB 不 CHECK 只增不改)。
+func PipelinePlanPolicy(p string) PipelineOpt {
+	return func(o *pipelineOptions) { o.planPolicy = p }
+}
+
+func (s *Service) CreatePipeline(ctx context.Context, projectID, name, kind, description, risk, schedule string, opts ...PipelineOpt) (pipeline.Pipeline, error) {
+	return s.CreatePipelineAs(ctx, projectID, name, kind, description, risk, schedule, "human:cli", opts...)
 }
 
 // CreatePipelineAs 建流水线(绑 project):kind ∈ 白名单(空 → bugfix;非法 → ErrInvalid)、
 // risk 归一到 low/medium/high(缺省 medium)、schedule cron 五段校验(空/off = 不调度;
-// 非法 → ErrInvalid)。重名 → ErrConflict。schedule 存原文(10.2 起解析;服务器调度层遇非调度跳过)。
-func (s *Service) CreatePipelineAs(ctx context.Context, projectID, name, kind, description, risk, schedRaw, actor string) (pipeline.Pipeline, error) {
+// 非法 → ErrInvalid)、plan_policy ∈ 白名单(空 → adaptive;非法 → ErrInvalid)。重名 → ErrConflict。
+// schedule 存原文(10.2 起解析;服务器调度层遇非调度跳过)。plan_policy:insert 零列(DB 默认 adaptive 零
+// 漂移);请求 synthesize → 建后 Set(两步落库,仅当 created.PlanPolicy != 期望)。
+func (s *Service) CreatePipelineAs(ctx context.Context, projectID, name, kind, description, risk, schedRaw, actor string, opts ...PipelineOpt) (pipeline.Pipeline, error) {
 	if projectID == "" || name == "" {
 		return pipeline.Pipeline{}, fmt.Errorf("%w: --project and --name are required", ErrInvalid)
 	}
@@ -47,6 +60,19 @@ func (s *Service) CreatePipelineAs(ctx context.Context, projectID, name, kind, d
 	if !pipeline.ValidRisk(risk) {
 		return pipeline.Pipeline{}, fmt.Errorf("%w: invalid risk %q (low|medium|high)", ErrInvalid, risk)
 	}
+	var o pipelineOptions
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&o)
+		}
+	}
+	policy := strings.TrimSpace(o.planPolicy)
+	if policy == "" {
+		policy = pipeline.PlanPolicyAdaptive
+	}
+	if !pipeline.ValidPlanPolicy(policy) {
+		return pipeline.Pipeline{}, fmt.Errorf("%w: invalid plan_policy %q (known: %s)", ErrInvalid, policy, strings.Join(pipeline.ValidPlanPolicies, ", "))
+	}
 	sched, err := normalizeSchedule(schedRaw)
 	if err != nil {
 		return pipeline.Pipeline{}, err
@@ -64,7 +90,13 @@ func (s *Service) CreatePipelineAs(ctx context.Context, projectID, name, kind, d
 		}
 		return pipeline.Pipeline{}, err
 	}
-	_, err = s.audit(ctx, "pipeline", created.ID, "create", actor, kind+" "+name)
+	// 10.4 零漂移:建时 DB 默认 adaptive;仅当请求策略 ≠ 实际 → 建后 Set(两步落库)。
+	if created.PlanPolicy != policy {
+		if created, err = s.store.SetPipelinePlanPolicy(ctx, created.ID, policy); err != nil {
+			return pipeline.Pipeline{}, err
+		}
+	}
+	_, err = s.audit(ctx, "pipeline", created.ID, "create", actor, kind+" "+name+" (plan_policy="+policy+")")
 	return created, err
 }
 

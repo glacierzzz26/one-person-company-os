@@ -219,6 +219,21 @@ func (q *Queries) ReplacePlanPhase(ctx context.Context, arg ReplacePlanPhasePara
 	return i, err
 }
 
+const setPlanMaterialized = `-- name: SetPlanMaterialized :exec
+UPDATE task_plan SET materialized = ?, updated_at = ? WHERE id = ?
+`
+
+type SetPlanMaterializedParams struct {
+	Materialized string `json:"materialized"`
+	UpdatedAt    int64  `json:"updated_at"`
+	ID           string `json:"id"`
+}
+
+func (q *Queries) SetPlanMaterialized(ctx context.Context, arg SetPlanMaterializedParams) error {
+	_, err := q.db.ExecContext(ctx, setPlanMaterialized, arg.Materialized, arg.UpdatedAt, arg.ID)
+	return err
+}
+
 const setPlanUpdated = `-- name: SetPlanUpdated :exec
 UPDATE task_plan SET updated_at = ? WHERE id = ?
 `

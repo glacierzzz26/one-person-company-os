@@ -265,6 +265,7 @@ CREATE TABLE pipelines (
     risk        TEXT NOT NULL DEFAULT 'medium',   -- 护栏:low|medium|high
     status      TEXT NOT NULL DEFAULT 'active',   -- active | disabled(建即 active;run 须 active)
     schedule    TEXT NOT NULL DEFAULT '',         -- 10.2 才解析;本期恒空
+    plan_policy TEXT NOT NULL DEFAULT 'adaptive', -- 10.4:adaptive=grow 记账 / synthesize=frontier 合成(service 白名单校验)
     created_at  INTEGER NOT NULL,
     updated_at  INTEGER NOT NULL,
     UNIQUE (project_id, name)

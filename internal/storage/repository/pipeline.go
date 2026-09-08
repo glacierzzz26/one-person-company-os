@@ -49,6 +49,18 @@ func (s *Store) DeletePipelinesByProject(ctx context.Context, projectID string) 
 	return s.q.DeletePipelinesByProject(ctx, projectID)
 }
 
+// SetPipelinePlanPolicy 更新流水线 plan_policy(Phase 10.4;建时插入默认 adaptive, synthesize 变体两步落库);
+// 返回更新后整行。
+func (s *Store) SetPipelinePlanPolicy(ctx context.Context, id, policy string) (pipeline.Pipeline, error) {
+	row, err := s.q.SetPipelinePlanPolicy(ctx, query.SetPipelinePlanPolicyParams{
+		PlanPolicy: policy, UpdatedAt: now(), ID: id,
+	})
+	if err != nil {
+		return pipeline.Pipeline{}, err
+	}
+	return toPipeline(row), nil
+}
+
 // UpdatePipelineSchedule 更新流水线 schedule(原文落库);返回更新后整行。
 func (s *Store) UpdatePipelineSchedule(ctx context.Context, id, schedule string) (pipeline.Pipeline, error) {
 	row, err := s.q.UpdatePipelineSchedule(ctx, query.UpdatePipelineScheduleParams{
@@ -80,6 +92,6 @@ func toPipeline(r query.Pipeline) pipeline.Pipeline {
 	return pipeline.Pipeline{
 		ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Kind: r.Kind,
 		Description: r.Description, Risk: r.Risk, Status: r.Status, Schedule: r.Schedule,
-		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		PlanPolicy: r.PlanPolicy, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }

@@ -3,6 +3,8 @@ package server
 import (
 	"net/http"
 	"strconv"
+
+	"github.com/glacierzzz26/one-person-company-os/internal/service"
 )
 
 // Phase 10.1 — 项目 + 声明式流水线 /api/v1 handler(契约 docs/phase10/design/project-pipeline-foundation.md §3.4)。
@@ -75,7 +77,8 @@ func (s *Server) apiCreatePipeline(w http.ResponseWriter, r *http.Request) {
 		Kind        string `json:"kind"`
 		Description string `json:"description"`
 		Risk        string `json:"risk"`
-		Schedule    string `json:"schedule"` // 10.2:cron 五段;空/off = 不调度
+		Schedule    string `json:"schedule"`    // 10.2:cron 五段;空/off = 不调度
+		PlanPolicy  string `json:"plan_policy"` // 10.4:adaptive(缺省)| synthesize;空 → adaptive
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -84,7 +87,8 @@ func (s *Server) apiCreatePipeline(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, http.StatusBadRequest, "bad_request", "project_id and name are required")
 		return
 	}
-	p, err := s.svc.CreatePipelineAs(r.Context(), pathParam(r, "id"), req.Name, req.Kind, req.Description, req.Risk, req.Schedule, consoleActor)
+	p, err := s.svc.CreatePipelineAs(r.Context(), pathParam(r, "id"), req.Name, req.Kind, req.Description, req.Risk, req.Schedule, consoleActor,
+		service.PipelinePlanPolicy(req.PlanPolicy))
 	if err != nil {
 		handleServiceErr(w, err)
 		return

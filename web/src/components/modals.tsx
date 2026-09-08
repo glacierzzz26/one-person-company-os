@@ -15,7 +15,7 @@ import {
   selectEndpointModel,
   updatePipelineSchedule,
 } from '../api/endpoints';
-import type { Capability, DecisionKind, Endpoint, MemoryType, Pipeline, Risk } from '../api/types';
+import type { Capability, DecisionKind, Endpoint, MemoryType, Pipeline, PlanPolicy, Risk } from '../api/types';
 import { useData } from '../hooks/useApi';
 import { useApp } from '../store/AppContext';
 import { DECISION_KINDS, MEMORY_TYPES } from '../api/types';
@@ -371,7 +371,14 @@ export function PipelineCreateModal({
   const { message } = App.useApp();
   const [busy, setBusy] = useState(false);
 
-  const submit = async (v: { kind: Pipeline['kind']; name: string; description?: string; risk?: Risk; schedule?: string }) => {
+  const submit = async (v: {
+    kind: Pipeline['kind'];
+    name: string;
+    description?: string;
+    risk?: Risk;
+    schedule?: string;
+    plan_policy?: PlanPolicy;
+  }) => {
     const cron = validateCron(v.schedule ?? '');
     if (!cron.ok) {
       message.error(`调度格式不对:${cron.message}`);
@@ -385,6 +392,7 @@ export function PipelineCreateModal({
         description: v.description,
         risk: v.risk,
         schedule: cron.value || undefined,
+        plan_policy: v.plan_policy || undefined,
       });
       message.success('流水线已建:run 会在项目目录内建 engineering 任务执行');
       onClose();
@@ -420,6 +428,19 @@ export function PipelineCreateModal({
               { value: 'low', label: 'low' },
               { value: 'medium', label: 'medium' },
               { value: 'high', label: 'high(run 将卡审批门)' },
+            ]}
+          />
+        </Form.Item>
+        <Form.Item
+          name="plan_policy"
+          label="计划策略"
+          initialValue="adaptive"
+          extra={'自适应 = 执行中生成记账(默认);合成 = 首次认领时 frontier 先行合成整段计划 → 先审后干;合成失败自动降级自适应。巡检形态沿用例行模板,策略字段存而不用。'}
+        >
+          <Select
+            options={[
+              { value: 'adaptive', label: '自适应 · 执行中生成(grow 记账)' },
+              { value: 'synthesize', label: '合成 · frontier 先合成再执行(先审后干)' },
             ]}
           />
         </Form.Item>

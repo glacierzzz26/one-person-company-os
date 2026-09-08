@@ -61,6 +61,7 @@ func pipelineShowCmd() *cobra.Command {
 				{"STATUS", p.Status},
 				{"DESCRIPTION", p.Description},
 				{"SCHEDULE", p.Schedule},
+				{"PLAN_POLICY", p.PlanPolicy}, // 10.4:adaptive | synthesize(只读展示;写面在 Web)
 				{"WHEN", fmtTime(p.CreatedAt)},
 			}
 			printTable([]string{"FIELD", "VALUE"}, rows)

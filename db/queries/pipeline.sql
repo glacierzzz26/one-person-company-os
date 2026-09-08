@@ -18,6 +18,9 @@ DELETE FROM pipelines WHERE project_id = ?;
 -- name: UpdatePipelineSchedule :one
 UPDATE pipelines SET schedule = ?, updated_at = ? WHERE id = ? RETURNING *;
 
+-- name: SetPipelinePlanPolicy :one
+UPDATE pipelines SET plan_policy = ?, updated_at = ? WHERE id = ? RETURNING *;
+
 -- name: ListScheduledPipelines :many
 SELECT id, project_id, name, kind, schedule FROM pipelines
 WHERE status = 'active' AND schedule != ''

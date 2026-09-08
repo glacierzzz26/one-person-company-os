@@ -9,6 +9,9 @@ SELECT * FROM task_plan WHERE task_id = ?;
 -- name: SetPlanUpdated :exec
 UPDATE task_plan SET updated_at = ? WHERE id = ?;
 
+-- name: SetPlanMaterialized :exec
+UPDATE task_plan SET materialized = ?, updated_at = ? WHERE id = ?;
+
 -- name: CreatePlanPhase :one
 INSERT INTO task_plan_phase (id, plan_id, seq, kind, title, allocator, status, evidence, note, started_at, finished_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

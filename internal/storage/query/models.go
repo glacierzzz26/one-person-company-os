@@ -167,6 +167,7 @@ type Pipeline struct {
 	Risk        string `json:"risk"`
 	Status      string `json:"status"`
 	Schedule    string `json:"schedule"`
+	PlanPolicy  string `json:"plan_policy"`
 	CreatedAt   int64  `json:"created_at"`
 	UpdatedAt   int64  `json:"updated_at"`
 }

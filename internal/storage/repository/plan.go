@@ -35,6 +35,13 @@ func (s *Store) GetTaskPlanByTask(ctx context.Context, taskID string) (plan.RunP
 	return toRunPlan(row), true, nil
 }
 
+// SetPlanMaterialized 翻 plan.materialized(Phase 10.4 合成落账:grow → upfront;合成成功后铺行前置)。
+func (s *Store) SetPlanMaterialized(ctx context.Context, planID, materialized string) error {
+	return s.q.SetPlanMaterialized(ctx, query.SetPlanMaterializedParams{
+		Materialized: materialized, UpdatedAt: now(), ID: planID,
+	})
+}
+
 // SetPlanUpdated 刷 plan.updated_at(跟随最近 phase 变更;不为此加字段)。
 func (s *Store) SetPlanUpdated(ctx context.Context, planID string, ts int64) error {
 	return s.q.SetPlanUpdated(ctx, query.SetPlanUpdatedParams{UpdatedAt: ts, ID: planID})

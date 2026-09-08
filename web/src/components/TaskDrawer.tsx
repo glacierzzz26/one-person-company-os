@@ -1,9 +1,10 @@
 // 任务详情抽屉:全字段 KV + 执行回合时间线(GET /tasks/{id}/executions)。
 // status=waiting_approval 且存在 pending 审批 → 底部「处理该任务的审批」交给页面 DecideModal。
+// Phase 10.4:工程 run 若带 eng_synth_fail 审计 → 计划段首行提示「合成失败,已按自适应执行」。
 import { useMemo } from 'react';
-import { Button, Drawer, Empty, Spin, Tag } from 'antd';
-import { getTask, listApprovals, listExecutions } from '../api/endpoints';
-import type { Approval, Execution } from '../api/types';
+import { Alert, Button, Drawer, Empty, Spin, Tag } from 'antd';
+import { getTask, listApprovals, listAudits, listExecutions } from '../api/endpoints';
+import type { Approval, Audit, Execution } from '../api/types';
 import { useData } from '../hooks/useApi';
 import { useApp } from '../store/AppContext';
 import { KV, RiskText } from './common';
@@ -81,6 +82,13 @@ export default function TaskDrawer({
     () => listApprovals('pending'),
     { deps: [refreshKey], enabled: !!taskId },
   );
+  // 10.4 降级提示:工程 run 是否走过「合成失败 → 按自适应执行」(审计 eng_synth_fail)。
+  const isEngineRun = !!(task.data && task.data.pipeline_id && task.data.tool_name === 'engineering');
+  const audits = useData<Audit[]>(() => listAudits('task'), { deps: [refreshKey], enabled: isEngineRun });
+  const synthDegraded = useMemo(() => {
+    if (!taskId) return false;
+    return (audits.data ?? []).some((a) => a.entity_id === taskId && a.action === 'eng_synth_fail');
+  }, [audits.data, taskId]);
 
   const pendingApproval = useMemo(() => {
     if (!taskId) return null;
@@ -142,6 +150,15 @@ export default function TaskDrawer({
           ) : null}
           <KV rows={kv} />
           <div className="sect-h">计划(Phase 10.3 · GET /tasks/&#123;id&#125;/plan)</div>
+          {synthDegraded ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="合成失败,已按自适应执行"
+              description="该 synthesize run 首次认领时 frontier 未产出合法计划,已降级为常规工程驱动(自适应,grow 记账执行)。详见审计 eng_synth_fail。"
+              style={{ marginBottom: 10 }}
+            />
+          ) : null}
           <PlanBlock taskId={t.id} />
           <div className="sect-h">执行回合</div>
           <ExecutionBlock taskId={t.id} />
