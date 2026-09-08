@@ -86,6 +86,19 @@ export default function Projects() {
               ),
             },
             {
+              // D7:代码源徽标 = 项目 git origin 自动认领(通道 B 依 GitHub remote 路由)
+              title: '代码源',
+              width: 190,
+              render: (_, p) =>
+                p.code_source && p.code_source.has_github ? (
+                  <span className="mono" style={{ fontSize: 11.5, color: 'var(--accent)' }}>
+                    {p.code_source.owner}/{p.code_source.repo}
+                  </span>
+                ) : (
+                  <span className="dim" style={{ fontSize: 11.5 }}>—</span>
+                ),
+            },
+            {
               title: '描述',
               ellipsis: true,
               render: (_, p) => <span className="dim" style={{ fontSize: 12 }}>{p.description || '—'}</span>,
@@ -125,6 +138,7 @@ export default function Projects() {
         <Space className="dim" style={{ fontSize: 11.5 }} wrap>
           <span>run 语义:每条流水线 run = 项目目录内一条 engineering 任务(driver 回合;8.4 档位解析)。</span>
           <span>串行:同项目同时至多一条活跃 run(409)。删除仅断元数据引用,目录是 OS 资产。</span>
+          <span>代码源:项目 git 的 GitHub origin remote 自动认领(通道 B issue 接活 → 归此项目)。</span>
         </Space>
       </Flex>
 

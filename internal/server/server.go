@@ -425,18 +425,27 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// findRepoByOwner 归属解析:命中 owner/repo 的多条代码源时优先项目派生行(项目 = 主),legacy 兜底。
 func (s *Server) findRepoByOwner(ctx context.Context, owner, name string) (osrepo.Repo, error) {
 	repos, err := s.svc.ListAllRepos(ctx)
 	if err != nil {
 		return osrepo.Repo{}, err
 	}
+	var legacy osrepo.Repo
 	for _, r := range repos {
 		o, n, ok := github.ParseOwnerRepo(r.RepoURL)
-		if ok && o == owner && n == name {
+		if !ok || o != owner || n != name {
+			continue
+		}
+		if r.ProjectID != nil {
 			return r, nil
 		}
+		legacy = r
 	}
-	return osrepo.Repo{}, fmt.Errorf("no registered repo for %s/%s", owner, name)
+	if legacy.ID != "" {
+		return legacy, nil
+	}
+	return osrepo.Repo{}, fmt.Errorf("no code source for %s/%s (create a project on that git repo with a GitHub origin)", owner, name)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

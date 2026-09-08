@@ -81,7 +81,6 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(decisionCmd())
 	root.AddCommand(overviewCmd())
 	root.AddCommand(endpointCmd())
-	root.AddCommand(repoCmd())
 	root.AddCommand(intakeCmd())
 	root.AddCommand(projectCmd())
 	root.AddCommand(pipelineCmd())

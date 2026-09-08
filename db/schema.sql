@@ -187,11 +187,14 @@ CREATE TABLE repos (
     name           TEXT NOT NULL,
     repo_url       TEXT NOT NULL,
     workspace_path TEXT NOT NULL DEFAULT '',
+    project_id     TEXT REFERENCES projects(id),  -- Phase 10 D7:项目 code 源绑定(可空=legacy 手工登记行)
     created_at     INTEGER NOT NULL,
     UNIQUE (company_id, name)
 );
 
 CREATE INDEX idx_repos_company ON repos (company_id);
+
+CREATE UNIQUE INDEX idx_repos_project ON repos (project_id) WHERE project_id IS NOT NULL;
 
 CREATE TABLE issue_sync (
     id           TEXT PRIMARY KEY,

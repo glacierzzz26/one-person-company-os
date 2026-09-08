@@ -67,8 +67,29 @@ func (s *Service) SyncRepos(ctx context.Context, companyID string) ([]IntakeResu
 		return nil, err
 	}
 	if len(repos) == 0 {
-		return nil, fmt.Errorf("no registered repos (add one: os repo add --company <id> --name <n> --repo-url <github url> --workspace <dir>)")
+		return nil, fmt.Errorf("no code sources registered — create a project on a git repo with a GitHub origin remote (code source auto-registers), then run intake sync")
 	}
+
+	// D7 去重:同 company + owner/repo 的 legacy 行若已有项目派生代码源(bound) → 跳过,防同一条 issue 双算。
+	bound := map[string]bool{}
+	for _, r := range repos {
+		if r.ProjectID == nil {
+			continue
+		}
+		if owner, name, ok := github.ParseOwnerRepo(r.RepoURL); ok {
+			bound[ownerRepoKey(r.CompanyID, owner, name)] = true
+		}
+	}
+	sources := make([]osrepo.Repo, 0, len(repos))
+	for _, r := range repos {
+		if r.ProjectID == nil {
+			if owner, name, ok := github.ParseOwnerRepo(r.RepoURL); ok && bound[ownerRepoKey(r.CompanyID, owner, name)] {
+				continue
+			}
+		}
+		sources = append(sources, r)
+	}
+	repos = sources
 
 	// 9.3:issue 源按公司解析(secret github_token / company issue_source+fixture 路径;env 仅测试 seam,9.4 产品恒关)。
 	// 同公司仓库复用源(一次 OpenSecretCurrent,循环内 cache);单仓库解析失败不中断(记 errs 续跑)。
@@ -214,7 +235,13 @@ func (s *Service) createIssueTask(ctx context.Context, r osrepo.Repo, it github.
 		CompanyID: r.CompanyID, CapabilityID: capID, AgentID: agentID,
 		Title: title, Description: desc, ToolName: "engineering",
 		Risk: "medium", Workspace: r.WorkspacePath,
+		ProjectID: r.ProjectID, // D7:项目代码源接的活归属该项目(用项目目录干)
 	}, "intake")
+}
+
+// ownerRepoKey 归一化 company+owner/repo 为去重键(大小写不敏感)。
+func ownerRepoKey(companyID, owner, name string) string {
+	return companyID + "|" + strings.ToLower(owner) + "/" + strings.ToLower(name)
 }
 
 // triageIssue 对单条 issue 做分诊,返回处置 + 附注。scripted → 确定性;live → 模型。

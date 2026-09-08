@@ -194,12 +194,13 @@ type Project struct {
 }
 
 type Repo struct {
-	ID            string `json:"id"`
-	CompanyID     string `json:"company_id"`
-	Name          string `json:"name"`
-	RepoUrl       string `json:"repo_url"`
-	WorkspacePath string `json:"workspace_path"`
-	CreatedAt     int64  `json:"created_at"`
+	ID            string         `json:"id"`
+	CompanyID     string         `json:"company_id"`
+	Name          string         `json:"name"`
+	RepoUrl       string         `json:"repo_url"`
+	WorkspacePath string         `json:"workspace_path"`
+	ProjectID     sql.NullString `json:"project_id"`
+	CreatedAt     int64          `json:"created_at"`
 }
 
 type Secret struct {

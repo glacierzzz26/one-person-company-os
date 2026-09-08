@@ -1,6 +1,6 @@
 // Boot:ThemeProvider(三态)→ BootGate(/setup 首启门)→ AppProvider(公司/审批徽标/连接)→
-// Shell(空库建公司 / Spin / 主布局)。路由 / /approvals /decisions /tasks /repos /memories /audit
-// /endpoints /settings(与原型 8+1 视图一致;settings 为 9.2「控制台访问」卡)。
+// Shell(空库建公司 / Spin / 主布局)。路由 / /approvals /decisions /tasks /projects /memories
+// /audit /endpoints /settings(D7 起无独立「研发仓库」页 —— 代码源并入项目详情)。
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Flex, Spin } from 'antd';
@@ -13,7 +13,6 @@ import Overview from './pages/Overview';
 import Approvals from './pages/Approvals';
 import Decisions from './pages/Decisions';
 import Tasks from './pages/Tasks';
-import Repos from './pages/Repos';
 import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import Memories from './pages/Memories';
@@ -76,7 +75,6 @@ function BootGate() {
           <Route path="/approvals" element={<Approvals />} />
           <Route path="/decisions" element={<Decisions />} />
           <Route path="/tasks" element={<Tasks />} />
-          <Route path="/repos" element={<Repos />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/memories" element={<Memories />} />

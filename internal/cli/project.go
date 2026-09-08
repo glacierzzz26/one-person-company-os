@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/glacierzzz26/one-person-company-os/internal/github"
 	"github.com/spf13/cobra"
 )
 
@@ -11,6 +12,7 @@ func projectCmd() *cobra.Command {
 	cmd.AddCommand(projectListCmd())
 	cmd.AddCommand(projectShowCmd())
 	cmd.AddCommand(projectCreateCmd())
+	cmd.AddCommand(projectRefreshCodeCmd())
 	cmd.AddCommand(projectDeleteCmd())
 	return cmd
 }
@@ -57,9 +59,39 @@ func projectShowCmd() *cobra.Command {
 				{"NAME", p.Name},
 				{"ROOT_PATH", p.RootPath},
 				{"DESCRIPTION", p.Description},
-				{"WHEN", fmtTime(p.CreatedAt)},
 			}
+			// D7:code source 行(项目详情看代码源;无 → CODE_SOURCE -,刷新用 project refresh-code)。
+			if src, serr := svc.CodeSourceFor(cmd.Context(), p.ID); serr != nil {
+				return serr
+			} else if src != nil {
+				owner, repo, ok := github.ParseOwnerRepo(src.RepoURL)
+				code := src.RepoURL
+				if ok {
+					code = owner + "/" + repo
+				}
+				rows = append(rows, []string{"CODE_SOURCE", code})
+			} else {
+				rows = append(rows, []string{"CODE_SOURCE", "-"})
+			}
+			rows = append(rows, []string{"WHEN", fmtTime(p.CreatedAt)})
 			printTable([]string{"FIELD", "VALUE"}, rows)
+			return nil
+		},
+	}
+	return cmd
+}
+
+func projectRefreshCodeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "refresh-code <id>",
+		Short: "Re-adopt / refresh a project's code source from its git origin remote",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			r, err := svc.RefreshProjectCodeSourceAs(cmd.Context(), args[0], "human:cli")
+			if err != nil {
+				return err
+			}
+			fmt.Printf("code source for project %s: %s (workspace: %s)\n", shortID(args[0]), r.RepoURL, r.WorkspacePath)
 			return nil
 		},
 	}

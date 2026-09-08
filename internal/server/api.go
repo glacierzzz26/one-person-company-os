@@ -115,8 +115,6 @@ func (s *Server) registerAPIRoutes(r chi.Router) {
 	r.Post("/endpoints", s.apiAddEndpoint)
 	r.Post("/endpoints/{id}/select", s.apiSelectEndpointModel)
 	r.Post("/endpoints/{id}/models", s.apiFetchEndpointModels)
-	r.Get("/companies/{id}/repos", s.apiListRepos)
-	r.Post("/companies/{id}/repos", s.apiAddRepo)
 	r.Post("/companies/{id}/intake/sync", s.apiIntakeSync)
 
 	// Phase 10.1 — 项目 + 声明式流水线(契约 docs/phase10/design/project-pipeline-foundation.md §3.4)。
@@ -124,6 +122,7 @@ func (s *Server) registerAPIRoutes(r chi.Router) {
 	r.Post("/companies/{id}/projects", s.apiCreateProject)
 	r.Get("/projects/{id}", s.apiGetProject)
 	r.Delete("/projects/{id}", s.apiDeleteProject)
+	r.Post("/projects/{id}/code-source/refresh", s.apiRefreshProjectCodeSource) // D7:建后补/换 remote → 重认领代码源
 	r.Get("/projects/{id}/pipelines", s.apiListPipelines)
 	r.Post("/projects/{id}/pipelines", s.apiCreatePipeline)
 	r.Get("/projects/{id}/tasks", s.apiListProjectTasks)                 // 最近 runs(复用 ListTasksByProject)
@@ -587,36 +586,6 @@ func (s *Server) apiFetchEndpointModels(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	apiOK(w, models)
-}
-
-func (s *Server) apiListRepos(w http.ResponseWriter, r *http.Request) {
-	list, err := s.svc.ListRepos(r.Context(), pathParam(r, "id"))
-	if err != nil {
-		handleServiceErr(w, err)
-		return
-	}
-	apiOK(w, list)
-}
-
-func (s *Server) apiAddRepo(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name      string `json:"name"`
-		RepoURL   string `json:"repo_url"`
-		Workspace string `json:"workspace"`
-	}
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	if pathParam(r, "id") == "" || req.Name == "" || req.RepoURL == "" {
-		apiErr(w, http.StatusBadRequest, "bad_request", "company_id, name and repo_url are required")
-		return
-	}
-	repo, err := s.svc.AddRepoAs(r.Context(), pathParam(r, "id"), req.Name, req.RepoURL, req.Workspace, consoleActor)
-	if err != nil {
-		handleServiceErr(w, err)
-		return
-	}
-	apiCreated(w, repo)
 }
 
 func (s *Server) apiIntakeSync(w http.ResponseWriter, r *http.Request) {

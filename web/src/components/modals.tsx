@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, App, Button, Form, Input, Modal, Select } from 'antd';
 import {
   addEndpoint,
-  addRepo,
   createDecision,
   createMemory,
   createPipeline,
@@ -261,53 +260,6 @@ export function EndpointCreateModal({ open, onClose, onDone }: ModalProps) {
         </Form.Item>
         <div style={{ textAlign: 'right' }}>
           <Footer busy={busy} label="保存" onCancel={onClose} />
-        </div>
-      </Form>
-    </Modal>
-  );
-}
-
-/** 登记仓库(通道 B):登记后 webhook / 轮询 intake */
-export function RepoCreateModal({ open, onClose, onDone }: ModalProps) {
-  const { message } = App.useApp();
-  const { companyId } = useApp();
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (v: { name: string; repo_url: string; workspace?: string }) => {
-    if (!companyId) return;
-    setBusy(true);
-    try {
-      await addRepo(companyId, { name: v.name, repo_url: v.repo_url, workspace: v.workspace });
-      message.success('仓库已登记:点「立即同步」拉首批 issue');
-      onClose();
-      onDone();
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Modal open={open} title="登记仓库(通道 B)" onCancel={onClose} footer={null} width={520}>
-      <Form layout="vertical" onFinish={submit}>
-        <Form.Item name="name" label="名称 *" rules={[{ required: true, message: '必填' }]}>
-          <Input placeholder="例:acme/web" />
-        </Form.Item>
-        <Form.Item name="repo_url" label="Repo URL *" rules={[{ required: true, message: '必填' }]}>
-          <Input placeholder="https://github.com/acme/app" className="mono" />
-        </Form.Item>
-        <Form.Item name="workspace" label="Workspace">
-          <Input placeholder="/srv/ws/app" className="mono" />
-        </Form.Item>
-        <Alert
-          type="info"
-          showIcon
-          message="POST /api/webhook/github(公网)与轮询都会 intake;GitHub secret 与 OS_API_TOKEN 无关"
-          style={{ marginBottom: 12 }}
-        />
-        <div style={{ textAlign: 'right' }}>
-          <Footer busy={busy} label="登记" onCancel={onClose} />
         </div>
       </Form>
     </Modal>

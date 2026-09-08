@@ -10,25 +10,39 @@ import (
 	"database/sql"
 )
 
+const clearRepoProject = `-- name: ClearRepoProject :execrows
+UPDATE repos SET project_id = NULL WHERE project_id = ?
+`
+
+func (q *Queries) ClearRepoProject(ctx context.Context, projectID sql.NullString) (int64, error) {
+	result, err := q.db.ExecContext(ctx, clearRepoProject, projectID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const createRepo = `-- name: CreateRepo :one
-INSERT INTO repos (id, company_id, name, repo_url, workspace_path, created_at)
-VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id, company_id, name, repo_url, workspace_path, created_at
+INSERT INTO repos (id, company_id, project_id, name, repo_url, workspace_path, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+RETURNING id, company_id, name, repo_url, workspace_path, project_id, created_at
 `
 
 type CreateRepoParams struct {
-	ID            string `json:"id"`
-	CompanyID     string `json:"company_id"`
-	Name          string `json:"name"`
-	RepoUrl       string `json:"repo_url"`
-	WorkspacePath string `json:"workspace_path"`
-	CreatedAt     int64  `json:"created_at"`
+	ID            string         `json:"id"`
+	CompanyID     string         `json:"company_id"`
+	ProjectID     sql.NullString `json:"project_id"`
+	Name          string         `json:"name"`
+	RepoUrl       string         `json:"repo_url"`
+	WorkspacePath string         `json:"workspace_path"`
+	CreatedAt     int64          `json:"created_at"`
 }
 
 func (q *Queries) CreateRepo(ctx context.Context, arg CreateRepoParams) (Repo, error) {
 	row := q.db.QueryRowContext(ctx, createRepo,
 		arg.ID,
 		arg.CompanyID,
+		arg.ProjectID,
 		arg.Name,
 		arg.RepoUrl,
 		arg.WorkspacePath,
@@ -41,6 +55,7 @@ func (q *Queries) CreateRepo(ctx context.Context, arg CreateRepoParams) (Repo, e
 		&i.Name,
 		&i.RepoUrl,
 		&i.WorkspacePath,
+		&i.ProjectID,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -73,7 +88,7 @@ func (q *Queries) GetIssueSync(ctx context.Context, arg GetIssueSyncParams) (Iss
 }
 
 const getRepo = `-- name: GetRepo :one
-SELECT id, company_id, name, repo_url, workspace_path, created_at FROM repos WHERE id = ?
+SELECT id, company_id, name, repo_url, workspace_path, project_id, created_at FROM repos WHERE id = ?
 `
 
 func (q *Queries) GetRepo(ctx context.Context, id string) (Repo, error) {
@@ -85,13 +100,33 @@ func (q *Queries) GetRepo(ctx context.Context, id string) (Repo, error) {
 		&i.Name,
 		&i.RepoUrl,
 		&i.WorkspacePath,
+		&i.ProjectID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getRepoByProject = `-- name: GetRepoByProject :one
+SELECT id, company_id, name, repo_url, workspace_path, project_id, created_at FROM repos WHERE project_id = ? LIMIT 1
+`
+
+func (q *Queries) GetRepoByProject(ctx context.Context, projectID sql.NullString) (Repo, error) {
+	row := q.db.QueryRowContext(ctx, getRepoByProject, projectID)
+	var i Repo
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.Name,
+		&i.RepoUrl,
+		&i.WorkspacePath,
+		&i.ProjectID,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const listAllRepos = `-- name: ListAllRepos :many
-SELECT id, company_id, name, repo_url, workspace_path, created_at FROM repos ORDER BY company_id, created_at DESC
+SELECT id, company_id, name, repo_url, workspace_path, project_id, created_at FROM repos ORDER BY company_id, created_at DESC
 `
 
 func (q *Queries) ListAllRepos(ctx context.Context) ([]Repo, error) {
@@ -109,6 +144,7 @@ func (q *Queries) ListAllRepos(ctx context.Context) ([]Repo, error) {
 			&i.Name,
 			&i.RepoUrl,
 			&i.WorkspacePath,
+			&i.ProjectID,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -162,7 +198,7 @@ func (q *Queries) ListIssueSync(ctx context.Context, companyID string) ([]IssueS
 }
 
 const listRepos = `-- name: ListRepos :many
-SELECT id, company_id, name, repo_url, workspace_path, created_at FROM repos WHERE company_id = ? ORDER BY created_at DESC
+SELECT id, company_id, name, repo_url, workspace_path, project_id, created_at FROM repos WHERE company_id = ? ORDER BY created_at DESC
 `
 
 func (q *Queries) ListRepos(ctx context.Context, companyID string) ([]Repo, error) {
@@ -180,6 +216,7 @@ func (q *Queries) ListRepos(ctx context.Context, companyID string) ([]Repo, erro
 			&i.Name,
 			&i.RepoUrl,
 			&i.WorkspacePath,
+			&i.ProjectID,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -193,6 +230,47 @@ func (q *Queries) ListRepos(ctx context.Context, companyID string) ([]Repo, erro
 		return nil, err
 	}
 	return items, nil
+}
+
+const setRepoProject = `-- name: SetRepoProject :execrows
+UPDATE repos SET project_id = ? WHERE id = ?
+`
+
+type SetRepoProjectParams struct {
+	ProjectID sql.NullString `json:"project_id"`
+	ID        string         `json:"id"`
+}
+
+func (q *Queries) SetRepoProject(ctx context.Context, arg SetRepoProjectParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setRepoProject, arg.ProjectID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setRepoSource = `-- name: SetRepoSource :execrows
+UPDATE repos SET name = ?, repo_url = ?, workspace_path = ? WHERE id = ?
+`
+
+type SetRepoSourceParams struct {
+	Name          string `json:"name"`
+	RepoUrl       string `json:"repo_url"`
+	WorkspacePath string `json:"workspace_path"`
+	ID            string `json:"id"`
+}
+
+func (q *Queries) SetRepoSource(ctx context.Context, arg SetRepoSourceParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setRepoSource,
+		arg.Name,
+		arg.RepoUrl,
+		arg.WorkspacePath,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const upsertIssueSync = `-- name: UpsertIssueSync :one

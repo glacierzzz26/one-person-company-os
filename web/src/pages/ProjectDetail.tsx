@@ -21,20 +21,25 @@ import {
   DeleteOutlined,
   FileTextOutlined,
   FolderOutlined,
+  GithubOutlined,
   OrderedListOutlined,
   PlayCircleOutlined,
   PlusOutlined,
+  ReloadOutlined,
   ScheduleOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { Approval, PatrolReport, Pipeline, Project, Task } from '../api/types';
+import type { Approval, IntakeResult, PatrolReport, Pipeline, Project, Task } from '../api/types';
 import {
   deletePipeline,
   deleteProject,
   getPatrolReport,
   getProject,
+  intakeSync,
   listPipelines,
   listProjectTasks,
+  refreshProjectCodeSource,
 } from '../api/endpoints';
 import { useApp } from '../store/AppContext';
 import { useData } from '../hooks/useApi';
@@ -43,7 +48,14 @@ import StatusTag from '../components/StatusTag';
 import DecideModal from '../components/DecideModal';
 import TaskDrawer from '../components/TaskDrawer';
 import { PipelineCreateModal, PipelineRunModal, PipelineScheduleModal } from '../components/modals';
-import { pipelineKindLabel, pipelineStatusLabel, pipelineStatusPreset, taskStatusLabel, taskStatusPreset } from '../utils/dicts';
+import {
+  dispositionLabel,
+  pipelineKindLabel,
+  pipelineStatusLabel,
+  pipelineStatusPreset,
+  taskStatusLabel,
+  taskStatusPreset,
+} from '../utils/dicts';
 import { parsePatrolResult } from '../utils/patrol';
 import { fmtT } from '../utils/time';
 
@@ -60,6 +72,8 @@ export default function ProjectDetail() {
   const [repTask, setRepTask] = useState<Task | null>(null);
   const [planTask, setPlanTask] = useState<string | null>(null); // 10.3:runs 行「计划」→ TaskDrawer
   const [decideApproval, setDecideApproval] = useState<Approval | null>(null);
+  const [syncing, setSyncing] = useState(false); // D7:同步 issue(公司级;遍历本项目代码源 + legacy)
+  const [refreshing, setRefreshing] = useState(false); // D7:重认领代码源(remote 后补/更换后)
 
   const project = useData<Project>(() => getProject(projectId), {
     deps: [projectId, refreshKey],
@@ -98,6 +112,37 @@ export default function ProjectDetail() {
       bump();
     } catch (e) {
       message.error(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  // D7:通道 B 同步 — 公司级 intake(本项目代码源 + legacy);结果挑本项目行展示(derived 行 repo name == project name)。
+  const syncIssues = async () => {
+    if (!p) return;
+    setSyncing(true);
+    try {
+      const results = await intakeSync(p.company_id);
+      const mine = results.find((r) => r.repo === p.name) ?? results[0];
+      toastIntake(message, mine);
+      bump();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // D7:重新认领代码源 — 项目根 git 的 GitHub origin remote → repos 绑定行(建后补 remote / 换 remote)。
+  const refreshCode = async () => {
+    if (!p) return;
+    setRefreshing(true);
+    try {
+      const cs = await refreshProjectCodeSource(p.id);
+      message.success(cs.has_github ? `代码源已认领:${cs.owner}/${cs.repo}` : `代码源已认领:${cs.repo_url}`);
+      bump();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -145,6 +190,53 @@ export default function ProjectDetail() {
           </Flex>
         ) : (
           <EmptyState text="加载项目…" />
+        )}
+      </Card>
+
+      {/* 代码源(D7:仓库收敛为项目的代码源绑定 —— 项目 git 的 GitHub origin 自动认领) */}
+      <Card
+        size="small"
+        title={
+          <Space size={6}>
+            <GithubOutlined />
+            代码源 · 通道 B
+          </Space>
+        }
+        extra={
+          <Space size={4}>
+            <Button size="small" icon={<SyncOutlined />} loading={syncing} disabled={!p} onClick={syncIssues}>
+              同步 issue
+            </Button>
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              loading={refreshing}
+              disabled={!p}
+              onClick={refreshCode}
+              title="按项目根 git origin remote (重)认领代码源"
+            >
+              重新认领
+            </Button>
+          </Space>
+        }
+        style={{ marginBottom: 14 }}
+      >
+        {p && p.code_source && p.code_source.has_github ? (
+          <Flex gap={22} wrap align="center">
+            <span className="mono" style={{ fontSize: 13, color: 'var(--accent)' }}>
+              {p.code_source.owner}/{p.code_source.repo}
+            </span>
+            <span className="mono dim" style={{ fontSize: 12 }}>{p.code_source.repo_url}</span>
+            <span className="dim" style={{ fontSize: 12 }}>从本项目 git origin 认领;issue 接活(通道 B)→ 归此项目、用项目目录干</span>
+          </Flex>
+        ) : (
+          <Flex gap={12} wrap align="center" justify="space-between">
+            <Space className="dim" style={{ fontSize: 12 }} wrap>
+              <span>无 GitHub origin remote(通道 B 不适用;issue 仍可经手工 legacy 行同步)。</span>
+              <span className="mono">git remote add origin &lt;github url&gt;</span>
+            </Space>
+            <span className="dim" style={{ fontSize: 12 }}>补上后点「重新认领」即自动建代码源</span>
+          </Flex>
         )}
       </Card>
 
@@ -317,6 +409,20 @@ export default function ProjectDetail() {
       />
     </div>
   );
+}
+
+// ---- 通道 B 同步结果 toast(D7;原 Repos.tsx toastIntake 迁入) ----
+
+function toastIntake(messageApi: ReturnType<typeof App.useApp>['message'], r?: IntakeResult) {
+  if (!r) {
+    messageApi.warning('同步完成但无代码源返回(公司下没有 GitHub 代码源?)');
+    return;
+  }
+  const parts = [`${r.repo}:看到 ${r.issues_seen} · 已见 ${r.already}`];
+  for (const [k, n] of Object.entries(r.by_disp)) if (n) parts.push(`${dispositionLabel(k)}×${n}`);
+  if (r.created_tasks.length) parts.push(`建单 ${r.created_tasks.length}`);
+  if (r.asks.length) parts.push(`问人 ${r.asks.length}`);
+  messageApi.success(parts.join(' · '));
 }
 
 // ---- 裁决列 ----

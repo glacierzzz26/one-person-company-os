@@ -204,14 +204,15 @@ export interface ModelInfo {
   id: string;
 }
 
-// ===================== repo (研发仓库 · 通道 B) =====================
-export interface Repo {
-  id: string;
-  company_id: string;
-  name: string;
+// ===================== code source(D7:仓库收敛为项目的代码源绑定) =====================
+// server /projects/{id} 响应 projectView.code_source(可 null);refresh-code 端点返回同一形状。
+export interface CodeSource {
+  repo_id: string;
   repo_url: string;
-  workspace_path: string;
-  created_at: number;
+  owner: string;
+  repo: string;
+  bound: boolean; // 绑到项目(非 legacy)
+  has_github: boolean; // remote 可解析 GitHub owner/repo(通道 B 可路由)
 }
 
 export interface IntakeAsk {
@@ -240,6 +241,8 @@ export interface Project {
   description: string;
   created_at: number;
   updated_at: number;
+  // D7 加性富化(server projectViewOf):代码源 = 项目 git remote 自动认领的 repos 绑定行;无 GitHub origin → null。
+  code_source: CodeSource | null;
 }
 
 export const PIPELINE_KINDS = ['bugfix', 'develop', 'ops_patrol'] as const;
@@ -340,12 +343,6 @@ export interface AddEndpointReq {
   base_url: string;
   token?: string;
   proto?: string;
-}
-
-export interface AddRepoReq {
-  name: string;
-  repo_url: string;
-  workspace?: string;
 }
 
 export interface DecideApprovalReq {

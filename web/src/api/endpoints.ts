@@ -2,11 +2,11 @@
 import { request } from './client';
 import type {
   AddEndpointReq,
-  AddRepoReq,
   Agent,
   Approval,
   Audit,
   Capability,
+  CodeSource,
   Company,
   CompanySettings,
   CreateCompanyReq,
@@ -27,7 +27,6 @@ import type {
   PatrolReport,
   Pipeline,
   Project,
-  Repo,
   RotateConsoleTokenReq,
   RotateConsoleTokenResult,
   RotateMasterKeyResult,
@@ -125,10 +124,7 @@ export const selectEndpointModel = (id: string, model: string, role?: string, ti
 export const fetchEndpointModels = (id: string) =>
   request<ModelInfo[]>(`/api/v1/endpoints/${id}/models`, { method: 'POST' });
 
-export const listRepos = (companyId: string) =>
-  request<Repo[]>(`/api/v1/companies/${companyId}/repos`);
-export const addRepo = (companyId: string, body: AddRepoReq) =>
-  request<Repo>(`/api/v1/companies/${companyId}/repos`, { method: 'POST', body });
+// D7:手工 repos 登记口已去(代码源 = 项目 git origin 自动认领);同步入口保留(遍历 = 各项目代码源 + legacy)。
 export const intakeSync = (companyId: string) =>
   request<IntakeResult[]>(`/api/v1/companies/${companyId}/intake/sync`, { method: 'POST' });
 
@@ -140,6 +136,9 @@ export const createProject = (companyId: string, body: CreateProjectReq) =>
 export const getProject = (id: string) => request<Project>(`/api/v1/projects/${id}`);
 export const deleteProject = (id: string) =>
   request<{ id: string; deleted: boolean }>(`/api/v1/projects/${id}`, { method: 'DELETE' });
+// D7:建后补/换 GitHub origin remote → 重认领/刷新项目代码源;无 remote → 400。
+export const refreshProjectCodeSource = (id: string) =>
+  request<CodeSource>(`/api/v1/projects/${id}/code-source/refresh`, { method: 'POST' });
 
 export const listPipelines = (projectId: string) =>
   request<Pipeline[]>(`/api/v1/projects/${projectId}/pipelines`);

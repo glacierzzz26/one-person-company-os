@@ -1,14 +1,50 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
+	"github.com/glacierzzz26/one-person-company-os/internal/github"
+	"github.com/glacierzzz26/one-person-company-os/internal/project"
 	"github.com/glacierzzz26/one-person-company-os/internal/service"
 )
 
 // Phase 10.1 — 项目 + 声明式流水线 /api/v1 handler(契约 docs/phase10/design/project-pipeline-foundation.md §3.4)。
 // 全部是 service 方法 thin wrapper;写操作 actor = consoleActor(human:console)。
+
+// projectView 是项目视图(加性富化 D7 code_source):原字段逐字保留,外加 code_source(可空)。
+type projectView struct {
+	project.Project
+	CodeSource *codeSourceView `json:"code_source"`
+}
+
+type codeSourceView struct {
+	RepoID    string `json:"repo_id"`
+	RepoURL   string `json:"repo_url"`
+	Owner     string `json:"owner"`
+	Repo      string `json:"repo"`
+	Bound     bool   `json:"bound"`      // 绑到项目(非 legacy)
+	HasGithub bool   `json:"has_github"` // remote 可解析 GitHub owner/repo(通道 B 可路由)
+}
+
+// projectViewOf 把一条项目富化成 projectView(读一次代码源;无绑定 → code_source null)。
+func (s *Server) projectViewOf(ctx context.Context, p project.Project) (projectView, error) {
+	view := projectView{Project: p}
+	src, err := s.svc.CodeSourceFor(ctx, p.ID)
+	if err != nil {
+		return view, err
+	}
+	if src == nil {
+		return view, nil
+	}
+	cv := &codeSourceView{RepoID: src.ID, RepoURL: src.RepoURL, Bound: src.ProjectID != nil}
+	if o, n, ok := github.ParseOwnerRepo(src.RepoURL); ok {
+		cv.Owner, cv.Repo, cv.HasGithub = o, n, true
+	}
+	view.CodeSource = cv
+	return view, nil
+}
 
 // ---- 项目 ----
 
@@ -18,7 +54,16 @@ func (s *Server) apiListProjects(w http.ResponseWriter, r *http.Request) {
 		handleServiceErr(w, err)
 		return
 	}
-	apiOK(w, list)
+	views := make([]projectView, 0, len(list))
+	for _, p := range list {
+		v, verr := s.projectViewOf(r.Context(), p)
+		if verr != nil {
+			handleServiceErr(w, verr)
+			return
+		}
+		views = append(views, v)
+	}
+	apiOK(w, views)
 }
 
 func (s *Server) apiCreateProject(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +84,12 @@ func (s *Server) apiCreateProject(w http.ResponseWriter, r *http.Request) {
 		handleServiceErr(w, err)
 		return
 	}
-	apiCreated(w, p)
+	v, verr := s.projectViewOf(r.Context(), p)
+	if verr != nil {
+		handleServiceErr(w, verr)
+		return
+	}
+	apiCreated(w, v)
 }
 
 func (s *Server) apiGetProject(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +98,27 @@ func (s *Server) apiGetProject(w http.ResponseWriter, r *http.Request) {
 		handleServiceErr(w, err)
 		return
 	}
-	apiOK(w, p)
+	v, verr := s.projectViewOf(r.Context(), p)
+	if verr != nil {
+		handleServiceErr(w, verr)
+		return
+	}
+	apiOK(w, v)
+}
+
+// apiRefreshProjectCodeSource 重新认领/刷新项目代码源(建项目后补 remote 或换 remote):
+// POST /projects/{id}/code-source/refresh → 无 GitHub remote → 400(ErrInvalid 带指引)。
+func (s *Server) apiRefreshProjectCodeSource(w http.ResponseWriter, r *http.Request) {
+	repo, err := s.svc.RefreshProjectCodeSourceAs(r.Context(), pathParam(r, "id"), consoleActor)
+	if err != nil {
+		handleServiceErr(w, err)
+		return
+	}
+	cv := &codeSourceView{RepoID: repo.ID, RepoURL: repo.RepoURL, Bound: repo.ProjectID != nil}
+	if o, n, ok := github.ParseOwnerRepo(repo.RepoURL); ok {
+		cv.Owner, cv.Repo, cv.HasGithub = o, n, true
+	}
+	apiOK(w, cv)
 }
 
 func (s *Server) apiDeleteProject(w http.ResponseWriter, r *http.Request) {
