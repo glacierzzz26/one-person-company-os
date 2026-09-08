@@ -9,10 +9,10 @@ import (
 
 func TestParsePlan(t *testing.T) {
 	cases := []struct {
-		name      string
-		out       string
+		name       string
+		out        string
 		wantAction string
-		wantN     int // split 子任务数;-1 表示不校验
+		wantN      int // split 子任务数;-1 表示不校验
 	}{
 		{"direct JSON", `{"action":"direct"}`, planActionDirect, -1},
 		{"direct fenced JSON", "```json\n{\"action\":\"direct\"}\n```", planActionDirect, -1},

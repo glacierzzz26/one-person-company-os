@@ -135,9 +135,18 @@ func (s *Service) runEngineering(ctx context.Context, workerID string, t task.Ta
 		verdict, reviewReason := parseReview(reviewOut)
 		switch verdict {
 		case "":
+			// Phase 10.3 记账:评审不可解析 → 该 round 的评审 accept 行 fail(仅当任务有 plan,grow no-op)。
+			if err := s.ledgerAppendRound(ctx, t, round, diff, testSummary, int64(freeRework), "fail",
+				"cannot parse review verdict"); err != nil {
+				return err
+			}
 			return s.engFail(ctx, t, "review", runCtx,
 				fmt.Errorf("cannot parse review verdict from output: %s", firstLine(reviewOut)))
 		case "approve":
+			// Phase 10.3 记账:round R 完成 → 写→测→审三行 ok(仅当有 plan;纯插桩不改语义)。
+			if err := s.ledgerAppendRound(ctx, t, round, diff, testSummary, int64(freeRework), "ok", "approve"); err != nil {
+				return err
+			}
 			if _, err := s.store.CompleteTask(ctx, t.ID, diff); err != nil {
 				return err
 			}
@@ -153,8 +162,18 @@ func (s *Service) runEngineering(ctx context.Context, workerID string, t task.Ta
 		if _, err := s.store.SetTaskRound(ctx, t.ID, round, conflict); err != nil {
 			return err
 		}
+		// Phase 10.3 记账:评审驳回的 reason(判读文本兜底)供该 round 评审行 note(fuse/rework 共用)。
+		reviewNote := firstLine(reviewReason)
+		if reviewNote == "" {
+			reviewNote = firstLine(reviewOut)
+		}
 		if conflict >= engFuseMax {
 			// 熔断 → waiting_approval(人工决定;decision 由 DecideApproval 自动落库)。
+			// Phase 10.3 记账:该 round 评审行 fail + note 熔断(approve 续跑后按新 R 继续 append)。
+			if err := s.ledgerAppendRound(ctx, t, round, diff, testSummary, int64(freeRework), "fail",
+				reviewNote+" — fuse → waiting_approval"); err != nil {
+				return err
+			}
 			if _, err := s.audit(ctx, "task", t.ID, "eng_fuse", taskActor(t),
 				fmt.Sprintf("reviewer rejected %d times; fuse at round=%d", conflict, round)); err != nil {
 				return err
@@ -162,6 +181,10 @@ func (s *Service) runEngineering(ctx context.Context, workerID string, t task.Ta
 			return s.requestApproval(ctx, t, fmt.Sprintf("engineering fuse: reviewer rejected %d times", conflict))
 		}
 		// 同任务返工:round 推进,下轮从新 writer 开始;把 reviewer 驳回理由喂给下一轮 writer。
+		// Phase 10.3 记账:needs_changes → 该 round 评审 accept 行 fail;下一 R 追加新行。
+		if err := s.ledgerAppendRound(ctx, t, round, diff, testSummary, int64(freeRework), "fail", reviewNote); err != nil {
+			return err
+		}
 		round++
 		humanOverride = false
 		hint = reviewReason

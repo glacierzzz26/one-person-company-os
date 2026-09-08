@@ -271,3 +271,33 @@ CREATE TABLE pipelines (
 );
 
 CREATE INDEX idx_pipelines_project ON pipelines (project_id);
+
+-- Phase 10.3 run 计划账本(契约 phase-plan-contract.md §3.1;迁移 0016 同步维护)。
+-- 每条流水线 run 一份计划;materialized = upfront(ops_patrol 建单预铺全) | grow(engineering 执行中 append)。
+CREATE TABLE task_plan (
+    id           TEXT PRIMARY KEY,
+    task_id      TEXT NOT NULL UNIQUE REFERENCES task(id),
+    kind         TEXT NOT NULL,
+    materialized TEXT NOT NULL DEFAULT 'grow',
+    created_at   INTEGER NOT NULL,
+    updated_at   INTEGER NOT NULL
+);
+
+CREATE INDEX idx_task_plan_task ON task_plan (task_id);
+
+CREATE TABLE task_plan_phase (
+    id          TEXT PRIMARY KEY,
+    plan_id     TEXT NOT NULL REFERENCES task_plan(id),
+    seq         INTEGER NOT NULL,
+    kind        TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    allocator   TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    evidence    TEXT NOT NULL DEFAULT '',
+    note        TEXT NOT NULL DEFAULT '',
+    started_at  INTEGER,
+    finished_at INTEGER,
+    UNIQUE (plan_id, seq)
+);
+
+CREATE INDEX idx_task_plan_phase_plan ON task_plan_phase (plan_id);

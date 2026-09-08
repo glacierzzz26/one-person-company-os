@@ -100,6 +100,7 @@ func (s *Server) registerAPIRoutes(r chi.Router) {
 	r.Post("/tasks", s.apiCreateTask)
 	r.Get("/tasks/{id}", s.apiGetTask)
 	r.Get("/tasks/{id}/executions", s.apiListTaskExecutions)
+	r.Get("/tasks/{id}/plan", s.apiGetTaskPlan) // 10.3:run 计划只读端点(无写口;契约 §3.4)
 
 	// 审批
 	r.Get("/approvals", s.apiListApprovals)
@@ -252,6 +253,70 @@ func (s *Server) apiListTaskExecutions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apiOK(w, list)
+}
+
+// ---- 10.3 run 计划只读端点 ----
+
+// apiGetTaskPlan 契约 §3.4:run 计划只读端点。未知 task → 404(GetTask);
+// 无 plan(非流水线 run / 历史 run)→ data {task_id, plan:null};有 → 阶段列表随 plan 嵌套。
+func (s *Server) apiGetTaskPlan(w http.ResponseWriter, r *http.Request) {
+	taskID := pathParam(r, "id")
+	if _, err := s.svc.GetTask(r.Context(), taskID); err != nil {
+		handleServiceErr(w, err)
+		return
+	}
+	rp, phases, ok, err := s.svc.GetTaskPlan(r.Context(), taskID)
+	if err != nil {
+		handleServiceErr(w, err)
+		return
+	}
+	if !ok {
+		apiOK(w, planReadResp{TaskID: taskID})
+		return
+	}
+	resp := planReadResp{TaskID: taskID}
+	resp.Plan = &planViewResp{
+		Kind:         rp.Kind,
+		Materialized: rp.Materialized,
+		CreatedAt:    rp.CreatedAt,
+		UpdatedAt:    rp.UpdatedAt,
+		Phases:       make([]phaseViewResp, 0, len(phases)),
+	}
+	for _, ph := range phases {
+		resp.Plan.Phases = append(resp.Plan.Phases, phaseViewResp{
+			Seq: ph.Seq, Kind: ph.Kind, Title: ph.Title, Allocator: ph.Allocator,
+			Status: ph.Status, Evidence: ph.Evidence, Note: ph.Note,
+			StartedAt: ph.StartedAt, FinishedAt: ph.FinishedAt,
+		})
+	}
+	apiOK(w, resp)
+}
+
+// planReadResp 契约 §3.4 响应:task_id 平铺 + plan(可 null = 非流水线 run / 历史 run)。
+type planReadResp struct {
+	TaskID string        `json:"task_id"`
+	Plan   *planViewResp `json:"plan"`
+}
+
+type planViewResp struct {
+	Kind         string          `json:"kind"` // patrol | engineering
+	Materialized string          `json:"materialized"`
+	CreatedAt    int64           `json:"created_at"`
+	UpdatedAt    int64           `json:"updated_at"`
+	Phases       []phaseViewResp `json:"phases"`
+}
+
+// phaseViewResp 展示字段(seq 起;无内部 id/plan_id)。
+type phaseViewResp struct {
+	Seq        int64  `json:"seq"`
+	Kind       string `json:"kind"`
+	Title      string `json:"title"`
+	Allocator  string `json:"allocator"`
+	Status     string `json:"status"`
+	Evidence   string `json:"evidence"`
+	Note       string `json:"note"`
+	StartedAt  *int64 `json:"started_at"`
+	FinishedAt *int64 `json:"finished_at"`
 }
 
 type taskCreateReq struct {

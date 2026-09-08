@@ -1,10 +1,13 @@
 // 审批三态决策:放行(approve→回队)/ 驳回(reject→failed)/ 要修改(changes→failed)。
 // POST /approvals/{id}/decision → 自动落 decision + human:console 审计;成功后 onDone。
+// Phase 10.3:决策前按 approval.task_id 拉 GET /tasks/{id}/plan —— upfront(patrol)→ 完整阶段列表 +
+// 「批准 = 按上述计划执行」;grow/null → 「计划将在执行中生成」。(先审后干在审批页落地,契约 §3.5)
 import { useEffect, useState } from 'react';
-import { App, Button, Input, Modal, Radio, Space, Typography } from 'antd';
+import { App, Button, Divider, Input, Modal, Radio, Space, Typography } from 'antd';
 import { decideApproval } from '../api/endpoints';
 import type { Approval } from '../api/types';
 import { RiskText } from './common';
+import PlanBlock from './PlanBlock';
 import { useApp } from '../store/AppContext';
 
 export interface DecideResult {
@@ -83,6 +86,12 @@ export default function DecideModal({
           {approval.requested_by}
         </span>
       </Typography.Paragraph>
+
+      <div style={{ margin: '4px 0 6px' }}>
+        <PlanBlock taskId={approval.task_id} mode="decide" />
+      </div>
+      <Divider style={{ margin: '8px 0 12px' }} />
+
       <Radio.Group
         value={decision}
         onChange={(e) => setDecision(e.target.value)}

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -181,6 +182,15 @@ func (s *Service) RunPipelineAs(ctx context.Context, pipelineID, request, actor 
 	}, actor)
 	if err != nil {
 		return task.Task{}, err
+	}
+	// Phase 10.3:计划 pre-materialize 与建单同步、先于任何 worker 认领 —— ops_patrol upfront 铺全
+	// (先审后干),bugfix/develop grow 只建 plan 行。落账失败 → run 不进入执行(不留 plan-less 静默 run):
+	// fail 该 run(attempt 0 → max_attempts=1 → FailTask)并把错误回调用方。
+	if err := s.ensureRunPlan(ctx, tsk, planKindFor(pl.Kind)); err != nil {
+		if _, ferr := s.store.FailTask(ctx, tsk.ID, "plan ledger init: "+err.Error()); ferr != nil {
+			log.Printf("fail run task %s after plan ledger init error: %v", short8(tsk.ID), ferr)
+		}
+		return task.Task{}, fmt.Errorf("init run plan ledger: %w", err)
 	}
 	_, err = s.audit(ctx, "pipeline", pl.ID, "run", actor, "task "+tsk.ID)
 	return tsk, err

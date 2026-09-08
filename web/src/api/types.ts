@@ -391,6 +391,33 @@ export interface PatrolReport {
   content: string; // 纯文本正文(限长)
 }
 
+// ===================== run 计划账本(Phase 10.3,契约 phase-plan-contract.md §3.4)=====================
+// GET /tasks/{id}/plan 只读端点响应:{task_id} + plan(可 null = 非流水线 run / 历史 run 无计划)。
+export interface PlanPhase {
+  seq: number;
+  kind: 'do' | 'accept' | 'dispose'; // 阶段类型
+  title: string; // 人类可读阶段目标(round/报告名等)
+  allocator: 'delegate' | 'os' | 'judge' | 'planner' | 'manual'; // 阶段执行者
+  status: 'pending' | 'running' | 'ok' | 'fail' | 'skipped';
+  evidence: string; // 产出引用/摘要(报告 rel/verdict/exec id/commit;不整存大产出)
+  note: string;
+  started_at: number | null;
+  finished_at: number | null;
+}
+
+export interface TaskPlan {
+  kind: 'patrol' | 'engineering'; // plan 形态
+  materialized: 'upfront' | 'grow'; // 落账时机
+  created_at: number;
+  updated_at: number;
+  phases: PlanPhase[]; // 有序阶段(seq 升序;grow 计划执行中追加)
+}
+
+export interface TaskPlanResponse {
+  task_id: string;
+  plan: TaskPlan | null;
+}
+
 // ===================== setup / console token(Phase 9.2)=====================
 export interface SetupStatus {
   initialized: boolean; // console_token_hash != '' = 已首启

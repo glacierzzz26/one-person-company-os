@@ -184,6 +184,24 @@ func wsPorcelainClean(ctx context.Context, ws string) bool {
 	return err == nil && strings.TrimSpace(out) == ""
 }
 
+// gitPorcelainSet 工作树 porcelain 快照集合(每行 trim 后的原文)。Phase 10.3 机械预检用它做
+// pre/post 快照对账:只追究「post 有、pre 无」的本次委派新增,委派前已存在用户脏项不误伤。
+func gitPorcelainSet(ctx context.Context, ws string) (map[string]bool, error) {
+	out, err := gitDirCmd(ctx, ws, "status", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+	set := map[string]bool{}
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		set[line] = true
+	}
+	return set, nil
+}
+
 // --- C1 git 助手(baseline ref + 逐委派 commit,8.3;替换 8.2 captureChanges「相对 HEAD 不 commit」语义) ---
 
 // wsBaselineRef 任务起点 ref 名:refs/os/tasks/<taskID>。轻量引用,首委派钉 HEAD,永不前移;

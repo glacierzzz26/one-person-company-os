@@ -96,6 +96,42 @@ export const PIPELINE_STATUS_CN: Record<string, string> = { active: '启用', di
 export const pipelineStatusLabel = (s: string): string => PIPELINE_STATUS_CN[s] ?? s;
 export const pipelineStatusPreset = (s: string): Preset => (s === 'active' ? 'success' : 'default');
 
+// ---- run 计划账本(Phase 10.3,契约 §3.5)----
+
+// plan.kind:patrol | engineering(与 pipeline.kind 分流同源)
+export const PLAN_KIND_CN: Record<string, string> = { patrol: '巡检计划', engineering: '工程计划' };
+export const planKindLabel = (k: string): string => PLAN_KIND_CN[k] ?? k;
+
+// plan.materialized:upfront = 建单即铺全(先审后干);grow = 执行中 append
+export const PLAN_MATERIALIZED_CN: Record<string, string> = { upfront: '预先铺全', grow: '执行中生成' };
+export const planMaterializedLabel = (m: string): string => PLAN_MATERIALIZED_CN[m] ?? m;
+
+// phase.kind:do | accept | dispose
+export const PHASE_KIND_CN: Record<string, string> = { do: '执行', accept: '验收', dispose: '处置' };
+export const phaseKindLabel = (k: string): string => PHASE_KIND_CN[k] ?? k;
+
+// phase.status:pending → running → ok|fail|skipped(与 plan 域常量逐字一致)
+export const PHASE_STATUS_CN: Record<string, string> = {
+  pending: '待执行',
+  running: '执行中',
+  ok: '通过',
+  fail: '失败',
+  skipped: '跳过',
+};
+export const phaseStatusLabel = (s: string): string => PHASE_STATUS_CN[s] ?? s;
+export const phaseStatusPreset = (s: string): Preset =>
+  s === 'ok' ? 'success' : s === 'fail' ? 'error' : s === 'running' ? 'processing' : s === 'pending' ? 'default' : 'default';
+
+// phase.allocator:阶段执行者归属(Web 展示)
+export const ALLOCATOR_CN: Record<string, string> = {
+  delegate: '委派 agent',
+  os: 'OS',
+  judge: '判读端点',
+  planner: 'planner',
+  manual: '人工',
+};
+export const allocatorLabel = (a: string): string => ALLOCATOR_CN[a] ?? a;
+
 export const ENDPOINT_ROLE_CN: Record<string, string> = { pool: '通用池 pool', planner: '规划 planner', standby: '热备 standby' };
 export const endpointRoleLabel = (r: string): string => ENDPOINT_ROLE_CN[r] ?? r;
 

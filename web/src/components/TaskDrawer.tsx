@@ -8,6 +8,7 @@ import { useData } from '../hooks/useApi';
 import { useApp } from '../store/AppContext';
 import { KV, RiskText } from './common';
 import StatusTag from './StatusTag';
+import PlanBlock from './PlanBlock';
 import { execStatusLabel, execStatusPreset, taskStatusLabel, taskStatusPreset } from '../utils/dicts';
 import { fmtT, short } from '../utils/time';
 
@@ -140,6 +141,8 @@ export default function TaskDrawer({
             </div>
           ) : null}
           <KV rows={kv} />
+          <div className="sect-h">计划(Phase 10.3 · GET /tasks/&#123;id&#125;/plan)</div>
+          <PlanBlock taskId={t.id} />
           <div className="sect-h">执行回合</div>
           <ExecutionBlock taskId={t.id} />
           <div className="dim mono" style={{ fontSize: 11.5, marginTop: 16 }}>

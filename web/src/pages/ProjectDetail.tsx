@@ -21,12 +21,13 @@ import {
   DeleteOutlined,
   FileTextOutlined,
   FolderOutlined,
+  OrderedListOutlined,
   PlayCircleOutlined,
   PlusOutlined,
   ScheduleOutlined,
 } from '@ant-design/icons';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { PatrolReport, Pipeline, Project, Task } from '../api/types';
+import type { Approval, PatrolReport, Pipeline, Project, Task } from '../api/types';
 import {
   deletePipeline,
   deleteProject,
@@ -39,6 +40,8 @@ import { useApp } from '../store/AppContext';
 import { useData } from '../hooks/useApi';
 import { PageHead, RiskText, EmptyState } from '../components/common';
 import StatusTag from '../components/StatusTag';
+import DecideModal from '../components/DecideModal';
+import TaskDrawer from '../components/TaskDrawer';
 import { PipelineCreateModal, PipelineRunModal, PipelineScheduleModal } from '../components/modals';
 import { pipelineKindLabel, pipelineStatusLabel, pipelineStatusPreset, taskStatusLabel, taskStatusPreset } from '../utils/dicts';
 import { parsePatrolResult } from '../utils/patrol';
@@ -55,6 +58,8 @@ export default function ProjectDetail() {
   const [runPipeline, setRunPipeline] = useState<Pipeline | null>(null);
   const [editSched, setEditSched] = useState<Pipeline | null>(null);
   const [repTask, setRepTask] = useState<Task | null>(null);
+  const [planTask, setPlanTask] = useState<string | null>(null); // 10.3:runs 行「计划」→ TaskDrawer
+  const [decideApproval, setDecideApproval] = useState<Approval | null>(null);
 
   const project = useData<Project>(() => getProject(projectId), {
     deps: [projectId, refreshKey],
@@ -258,6 +263,21 @@ export default function ProjectDetail() {
               render: (_, t) => <PatrolVerdictCell task={t} onOpen={() => setRepTask(t)} />,
             },
             { title: '开始', width: 110, render: (_, t) => <span className="dim" style={{ fontSize: 12 }}>{fmtT(t.created_at)}</span> },
+            {
+              title: '计划',
+              width: 88,
+              render: (_, t) => (
+                <Button
+                  size="small"
+                  type="link"
+                  icon={<OrderedListOutlined />}
+                  style={{ paddingInline: 4 }}
+                  onClick={() => setPlanTask(t.id)}
+                >
+                  计划
+                </Button>
+              ),
+            },
           ]}
         />
       </Card>
@@ -266,6 +286,16 @@ export default function ProjectDetail() {
       <PipelineRunModal open={!!runPipeline} pipeline={runPipeline} onClose={() => setRunPipeline(null)} onDone={bump} />
       <PipelineScheduleModal open={!!editSched} pipeline={editSched} onClose={() => setEditSched(null)} onDone={bump} />
       <PatrolReportModal task={repTask} projectId={projectId} onClose={() => setRepTask(null)} />
+      <TaskDrawer taskId={planTask} onClose={() => setPlanTask(null)} onOpenDecide={(a) => setDecideApproval(a)} />
+      <DecideModal
+        approval={decideApproval}
+        onClose={() => setDecideApproval(null)}
+        onDone={() => {
+          setDecideApproval(null);
+          setPlanTask(null);
+          bump();
+        }}
+      />
     </div>
   );
 }

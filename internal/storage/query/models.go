@@ -241,6 +241,29 @@ type Task struct {
 	UpdatedAt          int64          `json:"updated_at"`
 }
 
+type TaskPlan struct {
+	ID           string `json:"id"`
+	TaskID       string `json:"task_id"`
+	Kind         string `json:"kind"`
+	Materialized string `json:"materialized"`
+	CreatedAt    int64  `json:"created_at"`
+	UpdatedAt    int64  `json:"updated_at"`
+}
+
+type TaskPlanPhase struct {
+	ID         string        `json:"id"`
+	PlanID     string        `json:"plan_id"`
+	Seq        int64         `json:"seq"`
+	Kind       string        `json:"kind"`
+	Title      string        `json:"title"`
+	Allocator  string        `json:"allocator"`
+	Status     string        `json:"status"`
+	Evidence   string        `json:"evidence"`
+	Note       string        `json:"note"`
+	StartedAt  sql.NullInt64 `json:"started_at"`
+	FinishedAt sql.NullInt64 `json:"finished_at"`
+}
+
 type Workflow struct {
 	ID          string `json:"id"`
 	CompanyID   string `json:"company_id"`

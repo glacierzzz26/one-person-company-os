@@ -30,7 +30,7 @@ func TestFormatDigestFull(t *testing.T) {
 		Title: "2026-09-02 09:00", Created: 5, Completed: 3, Failed: 1, Fused: 2, Pending: 4,
 		ApprovalOK: 2, ApprovalReject: 1, ApprovalChg: 1, Decisions: 3,
 		Companies: 1, CompanyID: "company-x",
-		Ledger:    map[string]int{"merge": 1, "direct_work": 2, "skip": 1}, LedgerSeen: 4,
+		Ledger: map[string]int{"merge": 1, "direct_work": 2, "skip": 1}, LedgerSeen: 4,
 	}
 	text := formatDigest(st)
 	for _, want := range []string{

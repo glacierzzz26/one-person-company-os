@@ -58,6 +58,10 @@ func (s *Service) planEngineering(ctx context.Context, runCtx context.Context, w
 		if _, err := s.audit(ctx, "task", t.ID, "eng_plan_ask", taskActor(t), plan.reason); err != nil {
 			return false, err
 		}
+		// Phase 10.3 记账:planner ask → 计划留一条 pending do 行(approve 后续跑时由后续 grow 行补边界)。
+		if err := s.ledgerAppendAsk(ctx, t, plan.reason); err != nil {
+			return false, err
+		}
 		return true, s.requestApproval(ctx, t, "planner ask: "+plan.reason)
 	case planActionSplit:
 		subs := make([]task.Task, 0, len(plan.subtasks))
@@ -70,6 +74,10 @@ func (s *Service) planEngineering(ctx context.Context, runCtx context.Context, w
 		}
 		if _, err := s.audit(ctx, "task", t.ID, "eng_plan", taskActor(t),
 			fmt.Sprintf("planner split into %d subtasks", len(subs))); err != nil {
+			return true, err
+		}
+		// Phase 10.3 记账:父 run 拆解 N 子任务(子任务本身无 plan)。
+		if err := s.ledgerAppendSplit(ctx, t, len(subs)); err != nil {
 			return true, err
 		}
 		return true, s.driveChildrenToDone(ctx, runCtx, workerID, t, subs)

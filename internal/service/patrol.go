@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/glacierzzz26/one-person-company-os/internal/pipeline"
@@ -33,7 +34,11 @@ const (
 	PatrolResultTag = "patrol:"
 )
 
-// runPatrol 执行一次巡检 run(认领后同步跑完:报告产出 → 提交 → 判读 → 完成/处置)。
+// runPatrol 执行一次巡检 run(认领后同步跑完:报告产出 → 提交 → 机械预检 → 判读 → 完成/处置)。
+// Phase 10.3:同步维护 upfront 预铺计划账本(阶段翻状态 + 证据);机械预检(D4) = 产出/委派前 porcelain
+// 快照 → 报告提交后复检 —— 报告非空 + 除「快照已有脏项与本次报告文件」外无新增改动才进判读;
+// 越界残留/报告缺失空 → seq3.accept fail + engFail 不经判读。无 plan 的 run(非流水线/历史)/
+// 0016 前任务 → lg=nil,下述账本过渡全部 no-op,行为与既有完全一致。
 func (s *Service) runPatrol(ctx context.Context, workerID string, t task.Task, pl pipeline.Pipeline) error {
 	// 前置审批(risk=high 或 approval policy),与 runEngineering/runClaimed 同语义。
 	if need, reason, err := s.needsApproval(ctx, t); err != nil {
@@ -57,20 +62,57 @@ func (s *Service) runPatrol(ctx context.Context, workerID string, t task.Task, p
 	reportRel := filepath.Join(PatrolDirName, t.ID+".md")
 	reportAbs := filepath.Join(ws, reportRel)
 
-	// 产出报告:live = 委派 claude 只读巡检(报告由 agent 写);scripted = OS 写确定性 fixture 报告。
+	// 计划账本(upfront 预铺行翻状态;无计划 run → lg=nil)。load 失败 = DB 错 → 透传 fail(不吞)。
+	lg, lerr := s.loadRunLedger(ctx, t.ID)
+	if lerr != nil {
+		return s.engFail(ctx, t, "patrol", runCtx, fmt.Errorf("load plan ledger: %w", lerr))
+	}
+	// 机械层失败已在 engFail 路径记账的 best-effort 助手(nil-safe;不覆盖主错误)。
+	failLedger := func(seq int64, why string) {
+		if lg != nil {
+			_ = s.lgFinish(ctx, lg, seq, "fail", "", truncate(why, 200))
+		}
+	}
+	if err := s.lgStart(ctx, lg, 1); err != nil {
+		return s.engFail(ctx, t, "patrol", runCtx, err)
+	}
+
+	// 机械预检 pre:产出/委派前快照工作树脏项(委派前已有用户脏项在此集内 → post 对账不误伤)。
+	var preSnap map[string]bool
+	if wsIsGit(ctx, ws) {
+		snap, serr := gitPorcelainSet(ctx, ws)
+		if serr != nil {
+			return s.engFail(ctx, t, "patrol", runCtx, fmt.Errorf("mechanical pre snapshot: %w", serr))
+		}
+		preSnap = snap
+	}
+
+	// seq1.do 产出报告:live = 委派 claude 只读巡检(报告由 agent 写);scripted = OS 写确定性 fixture。
 	scripted := s.engineScripted(ctx, t.CompanyID)
 	if scripted {
-		if err := writeScriptedPatrolReport(t, pl, reportAbs); err != nil {
+		if err := writeScriptedPatrolReport(t, pl, ws, reportAbs); err != nil {
+			failLedger(1, err.Error())
 			return s.engFail(ctx, t, "patrol", runCtx, err)
 		}
 	} else {
 		if err := s.delegatePatrol(runCtx, t, pl, reportAbs); err != nil {
+			failLedger(1, err.Error())
 			return s.engFail(ctx, t, "patrol", runCtx, err)
 		}
 	}
+	if err := s.lgFinish(ctx, lg, 1, "ok", reportRel, ""); err != nil {
+		return s.engFail(ctx, t, "patrol", runCtx, err)
+	}
 
-	// OS 提交报告(只 add 该文件)。失败 → engFail,不默认绿。
+	// seq2.do:OS 提交报告(只 add 该文件)。失败 → engFail,不默认绿。
+	if err := s.lgStart(ctx, lg, 2); err != nil {
+		return s.engFail(ctx, t, "patrol", runCtx, err)
+	}
 	if err := s.commitPatrolReport(runCtx, ws, reportRel, pl, t); err != nil {
+		failLedger(2, err.Error())
+		return s.engFail(ctx, t, "patrol", runCtx, err)
+	}
+	if err := s.lgFinish(ctx, lg, 2, "ok", reportRel+" committed", ""); err != nil {
 		return s.engFail(ctx, t, "patrol", runCtx, err)
 	}
 	if _, err := s.audit(ctx, "task", t.ID, "patrol_delegate", taskActor(t),
@@ -78,10 +120,27 @@ func (s *Service) runPatrol(ctx context.Context, workerID string, t task.Task, p
 		return err
 	}
 
-	// OS 读回报告正文(限长)→ 判读(只对证据)。
+	// seq3.accept:OS 机械预检 —— 报告存在非空 + 工作树无本次委派越界残留(通过才进判读)。
+	if err := s.lgStart(ctx, lg, 3); err != nil {
+		return s.engFail(ctx, t, "patrol", runCtx, err)
+	}
 	report, _, err := readReportCapped(reportAbs)
 	if err != nil {
+		failLedger(3, "report unreadable")
 		return s.engFail(ctx, t, "patrol", runCtx, fmt.Errorf("read report %s: %w", reportRel, err))
+	}
+	if mechReason := mechanicalPatrolCheck(ctx, ws, preSnap, report, reportRel); mechReason != "" {
+		failLedger(3, mechReason)
+		return s.engFail(ctx, t, "patrol", runCtx, fmt.Errorf("%s", mechReason))
+	}
+	if err := s.lgFinish(ctx, lg, 3, "ok",
+		fmt.Sprintf("mechanical: report %d bytes; worktree residue=0", len(report)), ""); err != nil {
+		return s.engFail(ctx, t, "patrol", runCtx, err)
+	}
+
+	// seq4.accept:判读(只对证据文本)。live = frontier(reviewer→writer 兜底);scripted = 确定性桩。
+	if err := s.lgStart(ctx, lg, 4); err != nil {
+		return s.engFail(ctx, t, "patrol", runCtx, err)
 	}
 	var raw string
 	if scripted {
@@ -89,14 +148,19 @@ func (s *Service) runPatrol(ctx context.Context, workerID string, t task.Task, p
 	} else {
 		out, err := s.patrolJudge(runCtx, t, pl, report)
 		if err != nil {
+			failLedger(4, err.Error())
 			return s.engFail(ctx, t, "patrol", runCtx, err)
 		}
 		raw = out
 	}
 	v, ok := parsePatrolVerdict(raw)
 	if !ok {
+		failLedger(4, "cannot parse verdict")
 		return s.engFail(ctx, t, "patrol", runCtx,
 			fmt.Errorf("cannot parse patrol verdict from output: %s", firstLine(raw)))
+	}
+	if err := s.lgFinish(ctx, lg, 4, "ok", patrolVerdictLedger(v, reportRel), ""); err != nil {
+		return s.engFail(ctx, t, "patrol", runCtx, err)
 	}
 
 	// 完成任务(result 一体可查:标记 + 报告路径 + ok/severity/action + summary 首行)。
@@ -109,11 +173,55 @@ func (s *Service) runPatrol(ctx context.Context, workerID string, t task.Task, p
 		return err
 	}
 
-	// 非 ok → 处置(通知 + 链拉 / 留人;dispose best-effort 不回传错误 —— 任务已完成)。
+	// seq5.dispose:ok → skipped(no disposition);非 ok → 处置(通知 + 链拉 / 留人;best-effort)。
 	if !v.Ok {
-		s.disposePatrolFindings(ctx, t, pl, v)
+		if err := s.lgStart(ctx, lg, 5); err != nil {
+			return err
+		}
+		disp := s.disposePatrolFindings(ctx, t, pl, v)
+		if err := s.lgFinish(ctx, lg, 5, "ok",
+			fmt.Sprintf("severity=%s action=%s", v.Severity, v.Action), disp); err != nil {
+			return err
+		}
+	} else {
+		if err := s.lgFinish(ctx, lg, 5, "skipped", "", "ok — no disposition"); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// mechanicalPatrolCheck OS 机械卫生预检(D4 首落点;确定性、零网关):报告非空 + post/pre porcelain
+// 对账 —— {post 集 - pre 集} 仅允许空(报告文件已被 add+commit,不在 porcelain)。空串 = 通过;
+// 非空 = fail 原因(报告缺失/空 或 越界残留条目)。非 git 工作树由提交层先失败,此处放行不叠加。
+func mechanicalPatrolCheck(ctx context.Context, ws string, pre map[string]bool, report, reportRel string) string {
+	if strings.TrimSpace(report) == "" {
+		return fmt.Sprintf("mechanical: patrol report %s is empty", reportRel)
+	}
+	if !wsIsGit(ctx, ws) {
+		return ""
+	}
+	post, err := gitPorcelainSet(ctx, ws)
+	if err != nil {
+		return fmt.Sprintf("mechanical: post snapshot failed: %v", err)
+	}
+	residue := []string{}
+	for line := range post {
+		if !pre[line] {
+			residue = append(residue, line)
+		}
+	}
+	if len(residue) > 0 {
+		sort.Strings(residue)
+		return fmt.Sprintf("mechanical: inspector residue in worktree (%d entries): %s",
+			len(residue), strings.Join(residue, ", "))
+	}
+	return ""
+}
+
+// patrolVerdictLedger 判读阶段的账本 evidence(审计行 + summary 首行;仅引用/摘要)。
+func patrolVerdictLedger(v patrolVerdict, reportRel string) string {
+	return fmt.Sprintf("%s | %s", patrolVerdictAudit(v, reportRel), firstLine(v.Summary))
 }
 
 // delegatePatrol 委派一次只读巡检(claudeDelegator 等,同 writer 族;cwd=项目根)。报告由 agent
@@ -122,6 +230,11 @@ func (s *Service) delegatePatrol(ctx context.Context, t task.Task, pl pipeline.P
 	ws := t.WorkspacePath
 	if !wsIsGit(ctx, ws) {
 		return fmt.Errorf("patrol delegation requires a git workspace (task workspace=%q is not a git repo)", ws)
+	}
+	// Phase 10.3:与 engineering ensureBaseline 同语义,委派前排除 agent CLI 运行时残留目录
+	// (.claude/.codex)→ 不进 porcelain、不触发机械预检误伤(报告仍只 add 自身文件)。
+	if err := excludeWorkspaceTools(ctx, ws); err != nil {
+		return fmt.Errorf("exclude agent residue dirs: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Join(ws, PatrolDirName), 0o755); err != nil {
 		return fmt.Errorf("mkdir %s/: %w", PatrolDirName, err)
@@ -164,24 +277,26 @@ func (s *Service) commitPatrolReport(ctx context.Context, ws, reportRel string, 
 
 // disposePatrolFindings 非 ok 处置(契约 3.6):通知(best-effort)→ fix&high&同项目 active bugfix 则
 // 链式拉起 bugfix run(actor=system:patrol_chain;request=summary;变更仍过既有审批门)→ 成功审计
-// patrol_chain;链缺/忙/非 fix → 审计 patrol_manual 留人。全程 best-effort,不回传错误(任务已完成)。
-func (s *Service) disposePatrolFindings(ctx context.Context, t task.Task, pl pipeline.Pipeline, v patrolVerdict) {
+// patrol_chain;链缺/忙/非 fix → 审计 patrol_manual 留人。全程 best-effort,不回传错误(任务已完成);
+// 返回处置摘要(供 Phase 10.3 账本 seq5.dispose evidence;留人/链拉结果可查)。
+func (s *Service) disposePatrolFindings(ctx context.Context, t task.Task, pl pipeline.Pipeline, v patrolVerdict) string {
 	reportRel := filepath.Join(PatrolDirName, t.ID+".md")
 	if err := s.notifyCompany(ctx, t.CompanyID, patrolAlertText(pl, t, v, reportRel)); err != nil {
 		log.Printf("notify [patrol] pipeline %s: %v", short8(pl.ID), err)
 	}
-	if !(v.Action == "fix" && v.Severity == "high") {
-		_, err := s.audit(ctx, "task", t.ID, "patrol_manual", actorChain,
-			fmt.Sprintf("severity=%s action=%s — notify only, disposition manual", v.Severity, v.Action))
-		if err != nil {
+	manualAudit := func(detail string) string {
+		if _, err := s.audit(ctx, "task", t.ID, "patrol_manual", actorChain, detail); err != nil {
 			log.Printf("audit patrol_manual task %s: %v", short8(t.ID), err)
 		}
-		return
+		return detail
+	}
+	if !(v.Action == "fix" && v.Severity == "high") {
+		return manualAudit(fmt.Sprintf("severity=%s action=%s — notify only, disposition manual", v.Severity, v.Action))
 	}
 	pipes, err := s.store.ListPipelinesByProject(ctx, pl.ProjectID)
 	if err != nil {
 		log.Printf("patrol chain %s: list pipelines: %v", short8(pl.ID), err)
-		return
+		return "fix&high but list pipelines failed — notify only"
 	}
 	var bugfix *pipeline.Pipeline
 	for i := range pipes {
@@ -191,28 +306,19 @@ func (s *Service) disposePatrolFindings(ctx context.Context, t task.Task, pl pip
 		}
 	}
 	if bugfix == nil {
-		_, err := s.audit(ctx, "task", t.ID, "patrol_manual", actorChain,
-			"fix&high but no active bugfix pipeline under project — notify only")
-		if err != nil {
-			log.Printf("audit patrol_manual task %s: %v", short8(t.ID), err)
-		}
-		return
+		return manualAudit("fix&high but no active bugfix pipeline under project — notify only")
 	}
 	chainTask, err := s.RunPipelineAs(ctx, bugfix.ID, v.Summary, actorChain)
 	if err != nil {
 		// 同项目忙/其它硬错 → 不双发,留人(审计 manual,不把已完成的 patrol 打回失败)。
 		log.Printf("patrol chain %s → bugfix %s: %v", short8(pl.ID), short8(bugfix.ID), err)
-		_, aerr := s.audit(ctx, "task", t.ID, "patrol_manual", actorChain,
-			fmt.Sprintf("fix&high but chain run failed (%v) — notify only", err))
-		if aerr != nil {
-			log.Printf("audit patrol_manual task %s: %v", short8(t.ID), aerr)
-		}
-		return
+		return manualAudit(fmt.Sprintf("fix&high but chain run failed (%v) — notify only", err))
 	}
 	if _, err := s.audit(ctx, "task", t.ID, "patrol_chain", actorChain,
 		fmt.Sprintf("bugfix %s → task %s", short8(bugfix.ID), short8(chainTask.ID))); err != nil {
 		log.Printf("audit patrol_chain task %s: %v", short8(t.ID), err)
 	}
+	return fmt.Sprintf("chain → bugfix %s task %s", short8(bugfix.ID), short8(chainTask.ID))
 }
 
 // ---- 判读 / 简报 / 文本 helpers ----
@@ -324,7 +430,9 @@ func scriptedPatrolOutput() string {
 
 // writeScriptedPatrolReport scripted 公司:OS 写确定性 fixture 报告(内容固定含证据行,离线红线)。
 // 与 live 差异只在报告内容来源(claude 委派 vs fixture);落盘 + git 提交路径完全一致。
-func writeScriptedPatrolReport(t task.Task, pl pipeline.Pipeline, reportAbs string) error {
+// OS_SCRIPT_PATROL=residue(仅 scripted 分支可达;Phase 10.3 机械层 T3 用例):写完报告再在项目根
+// 植一个多余残留文件 → pre/post porcelain 对账必捕获 → 机械预检 fail(委派越界模拟)。
+func writeScriptedPatrolReport(t task.Task, pl pipeline.Pipeline, ws, reportAbs string) error {
 	if err := os.MkdirAll(filepath.Dir(reportAbs), 0o755); err != nil {
 		return fmt.Errorf("mkdir patrol dir: %w", err)
 	}
@@ -345,5 +453,14 @@ func writeScriptedPatrolReport(t task.Task, pl pipeline.Pipeline, reportAbs stri
 	default:
 		b.WriteString("No findings.\n  evidence: `git status --porcelain` empty; `go build ./...` exit 0; lockfile in sync (fixture)\n")
 	}
-	return os.WriteFile(reportAbs, []byte(b.String()), 0o644)
+	if err := os.WriteFile(reportAbs, []byte(b.String()), 0o644); err != nil {
+		return err
+	}
+	if strings.ToLower(strings.TrimSpace(os.Getenv("OS_SCRIPT_PATROL"))) == "residue" {
+		res := filepath.Join(ws, "residue-inspector.txt")
+		if err := os.WriteFile(res, []byte("stray file left by the inspector\n"), 0o644); err != nil {
+			return fmt.Errorf("plant fixture residue: %w", err)
+		}
+	}
+	return nil
 }

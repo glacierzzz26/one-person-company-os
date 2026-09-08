@@ -38,6 +38,7 @@ import type {
   SetupResult,
   SetupStatus,
   Task,
+  TaskPlanResponse,
   UpdateCompanySettingsReq,
   UpdateGlobalSettingsReq,
   UpdatePipelineScheduleReq,
@@ -77,6 +78,8 @@ export const listTasks = (p: TaskListParams = {}) => {
 export const getTask = (id: string) => request<Task>(`/api/v1/tasks/${id}`);
 export const listExecutions = (taskId: string) =>
   request<Execution[]>(`/api/v1/tasks/${taskId}/executions`);
+export const getTaskPlan = (taskId: string) =>
+  request<TaskPlanResponse>(`/api/v1/tasks/${taskId}/plan`); // 10.3 只读;plan 可 null
 export const createTask = (body: CreateTaskReq) => request<Task>('/api/v1/tasks', { method: 'POST', body });
 
 // ---- 审批 ----
