@@ -352,8 +352,9 @@ export interface DecideApprovalReq {
 
 export interface CreateProjectReq {
   name: string;
-  root_path: string; // 绝对路径:须已 git,或空/不存在(OS git init);非空非 git → 400
+  root_path: string; // 绝对路径:须已 git,或空/不存在(OS git init 或 clone);非空非 git → 400
   description?: string;
+  repo_url?: string; // 可空:root 空/不存在时 OS 自动 clone 该 GitHub 地址并绑定代码源
 }
 
 export interface CreatePipelineReq {

@@ -173,7 +173,7 @@ func TestTsrv1GetTaskPlanReadOnly(t *testing.T) {
 // seedTsrvProject 建一个 git 就绪项目 + 指定形态流水线(直接走 service 写;读端点鉴权仍经 HTTP)。
 func seedTsrvProject(t *testing.T, srv *Server, compID, prjName, plName, kind, desc string) (project.Project, pipeline.Pipeline) {
 	t.Helper()
-	prj, err := srv.svc.CreateProject(context.Background(), compID, prjName, filepath.Join(t.TempDir(), prjName), "Tsrv project")
+	prj, err := srv.svc.CreateProject(context.Background(), compID, prjName, filepath.Join(t.TempDir(), prjName), "Tsrv project", "")
 	if err != nil {
 		t.Fatalf("create project %s: %v", prjName, err)
 	}

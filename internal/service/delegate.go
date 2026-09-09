@@ -169,6 +169,20 @@ func gitDirCmd(ctx context.Context, ws string, args ...string) (string, error) {
 	return out.String(), nil
 }
 
+// gitCloneURL 把 repoURL 克隆进 dest(宿主侧 clone,不经 tool 白名单——它拒网络 git 是给 agent 用的)。
+// dest 须为空目录或不存在路径;git clone 二者皆可。token 注入(私有仓库)为后续扩展点:当前匿名 clone,
+// 将来经 URL 重写或 credential helper 注入公司 github_token,且不得把 token 写进克隆出的 origin。
+func gitCloneURL(ctx context.Context, repoURL, dest string) error {
+	cmd := exec.CommandContext(ctx, "git", "clone", repoURL, dest)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git clone %s -> %s: %w: %s", repoURL, dest, err, truncate(out.String(), 300))
+	}
+	return nil
+}
+
 // wsIsGit workspace 是否为 git 仓库。
 func wsIsGit(ctx context.Context, ws string) bool {
 	if strings.TrimSpace(ws) == "" {
@@ -351,6 +365,7 @@ func (s *Service) delegateBaseline(ctx context.Context, t task.Task) error {
 	if s.engineScripted(ctx, t.CompanyID) {
 		return nil
 	}
+	s.pullRunFresh(ctx, t) // 首个 fresh 认领(基线未钉)前自动拉上游最新;best-effort,见下
 	ws := t.WorkspacePath
 	if !wsIsGit(ctx, ws) {
 		return fmt.Errorf("writer delegation requires a git workspace (task workspace=%q is not a git repo; bind an os repo checkout)", ws)
@@ -366,6 +381,43 @@ func (s *Service) delegateBaseline(ctx context.Context, t task.Task) error {
 		return fmt.Errorf("task workspace %q is dirty at claim and this task has not delegated before; refusing to sweep unrelated pre-existing changes (commit or stash them, or bind a clean checkout)", ws)
 	}
 	return nil
+}
+
+// pullRunFresh 在工程 run 的首个 fresh 认领前把项目代码拉到上游最新(建时 clone 后的日常同步,
+// 决策:run 前自动拉)。best-effort,仅在全部条件满足时执行,否则静默/审计跳过 —— 不阻塞 run:
+//
+//	非 scripted(离线冒烟不碰网络)+ ws 是 git + 基线未钉(refs/os/tasks/<id> 不存在,即本 run
+//	尚未开始任何委派)+ porcelain clean(脏则 git pull 会被拒/不该合入本地未提交残留)
+//	+ 有 origin(本地-only 仓库无上游)→ git pull --ff-only(短超时,失败审计不中断)。
+//
+// 其余(续跑/返工已钉基线、工作区脏、scripted)一律不拉:每相位净 diff 以基线 ref 为锚,run 中
+// 间拉会污染判读/完成消费的 diff;delegateBaseline 仅在 !humanOverride 下被 driver 调用,
+// 熔断续跑与 patrol(不调本处)天然不拉。
+func (s *Service) pullRunFresh(ctx context.Context, t task.Task) {
+	if s.engineScripted(ctx, t.CompanyID) {
+		return
+	}
+	ws := t.WorkspacePath
+	if !wsIsGit(ctx, ws) {
+		return
+	}
+	if _, err := gitDirCmd(ctx, ws, "rev-parse", "--verify", "--quiet", wsBaselineRef(t.ID)); err == nil {
+		return // 基线已钉 → 本 run 已开始,不拉
+	}
+	if !wsPorcelainClean(ctx, ws) {
+		return // 脏 → 不碰本地残留
+	}
+	if gitRemoteOrigin(ctx, ws) == "" {
+		return // 本地-only
+	}
+	pullCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	if out, err := gitDirCmd(pullCtx, ws, "pull", "--ff-only"); err != nil {
+		_, _ = s.audit(ctx, "task", t.ID, "eng_sync", taskActor(t), "pull skipped: "+truncate(err.Error(), 200))
+	} else if strings.TrimSpace(out) == "" || strings.Contains(out, "Already up to date") {
+		// 无可拉取 → 静默
+		return
+	}
 }
 
 // delegateEnv writer_endpoint_id(可选)→ claude 委派 env(cheap 配对)。没设 → nil(claude 自带鉴权/模型)。

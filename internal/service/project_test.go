@@ -30,7 +30,7 @@ import (
 
 func mustCreateProject(t *testing.T, svc *Service, compID, name, dir string) project.Project {
 	t.Helper()
-	p, err := svc.CreateProject(context.Background(), compID, name, dir, "desc")
+	p, err := svc.CreateProject(context.Background(), compID, name, dir, "desc", "")
 	if err != nil {
 		t.Fatalf("CreateProject(%s,%s): %v", name, dir, err)
 	}
@@ -99,7 +99,7 @@ func TestP4NonEmptyNonGitRejected(t *testing.T) {
 	if err := os.WriteFile(marker, []byte("user content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := svc.CreateProject(ctx, compID, "bad-root", dir, "")
+	_, err := svc.CreateProject(ctx, compID, "bad-root", dir, "", "")
 	if !errors.Is(err, ErrInvalid) {
 		t.Fatalf("P4 want ErrInvalid, got %v", err)
 	}
@@ -124,13 +124,13 @@ func TestP5DuplicateProjectNameConflict(t *testing.T) {
 	ctx := context.Background()
 
 	mustCreateProject(t, svc, compID, "same-name", filepath.Join(t.TempDir(), "dup-a"))
-	_, err := svc.CreateProject(ctx, compID, "same-name", filepath.Join(t.TempDir(), "dup-b"), "")
+	_, err := svc.CreateProject(ctx, compID, "same-name", filepath.Join(t.TempDir(), "dup-b"), "", "")
 	if !errors.Is(err, ErrConflict) {
 		t.Fatalf("P5 want ErrConflict, got %v", err)
 	}
 	// 异公司同名合法。
 	compB := seedCompanyID(t, st)
-	if _, err := svc.CreateProject(ctx, compB, "same-name", filepath.Join(t.TempDir(), "dup-c"), ""); err != nil {
+	if _, err := svc.CreateProject(ctx, compB, "same-name", filepath.Join(t.TempDir(), "dup-c"), "", ""); err != nil {
 		t.Fatalf("P5 same name across companies must be ok: %v", err)
 	}
 }

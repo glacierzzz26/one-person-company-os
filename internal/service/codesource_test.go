@@ -67,7 +67,7 @@ func TestD1DeriveCodeSourceOnCreate(t *testing.T) {
 
 	remote := "https://github.com/acme/web.git"
 	dir := seedGitRemoteWorkspace(t, remote)
-	p, err := svc.CreateProject(ctx, compRemote, "web", dir, "d1")
+	p, err := svc.CreateProject(ctx, compRemote, "web", dir, "d1", "")
 	if err != nil {
 		t.Fatalf("CreateProject remote: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestD1DeriveCodeSourceOnCreate(t *testing.T) {
 	}
 
 	// D1b:无 remote 项目 → 不派生,正常建。
-	pBare, err := svc.CreateProject(ctx, compBare, "bare", seedGitWorkspace(t), "d1b")
+	pBare, err := svc.CreateProject(ctx, compBare, "bare", seedGitWorkspace(t), "d1b", "")
 	if err != nil {
 		t.Fatalf("CreateProject bare: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestD2AdoptLegacyRepo(t *testing.T) {
 	legacyOwner := seedLegacyRepo(t, svc, comp, "web-old", "https://github.com/acme/web.git", filepath.Join(t.TempDir(), "elsewhere"))
 
 	dir := seedGitRemoteWorkspace(t, "https://github.com/acme/web.git")
-	p, err := svc.CreateProject(ctx, comp, "web", dir, "d2")
+	p, err := svc.CreateProject(ctx, comp, "web", dir, "d2", "")
 	if err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestD2AdoptLegacyRepo(t *testing.T) {
 	// 同路径收养(无 remote 项目):legacy 行 workspace == 项目根 → 收养。
 	wsDir := seedGitWorkspace(t)
 	legacyPath := seedLegacyRepo(t, svc, comp, "path-repo", "/local/path/repo.git", wsDir)
-	p2, err := svc.CreateProject(ctx, comp, "path-project", wsDir, "d2b")
+	p2, err := svc.CreateProject(ctx, comp, "path-project", wsDir, "d2b", "")
 	if err != nil {
 		t.Fatalf("CreateProject path-adopt: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestD3RefreshCodeSource(t *testing.T) {
 
 	// 建项目时无 remote → 无代码源。
 	dir := seedGitWorkspace(t)
-	p, err := svc.CreateProject(ctx, comp, "app", dir, "d3")
+	p, err := svc.CreateProject(ctx, comp, "app", dir, "d3", "")
 	if err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestD4IssueTaskBindsProject(t *testing.T) {
 		`[{"repo_owner":"acme","repo_name":"web","number":11,"title":"Fix nav","body":"the nav is broken","html_url":"https://github.com/acme/web/issues/11"}]`)
 
 	dir := seedGitRemoteWorkspace(t, "https://github.com/acme/web.git")
-	p, err := svc.CreateProject(ctx, comp, "web", dir, "d4")
+	p, err := svc.CreateProject(ctx, comp, "web", dir, "d4", "")
 	if err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestD5LegacyDedupOnSync(t *testing.T) {
 	// legacy 与 derived 同 owner/repo(legacy 先登记,workspace 别处)。
 	seedLegacyRepo(t, svc, comp, "web-legacy", "https://github.com/acme/web.git", filepath.Join(t.TempDir(), "old-ws"))
 	dir := seedGitRemoteWorkspace(t, "https://github.com/acme/web.git")
-	p, err := svc.CreateProject(ctx, comp, "web", dir, "d5")
+	p, err := svc.CreateProject(ctx, comp, "web", dir, "d5", "")
 	if err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestD6DeleteProjectUnbindsRepo(t *testing.T) {
 		`[{"repo_owner":"acme","repo_name":"web","number":31,"title":"Fix api","body":"","html_url":"https://github.com/acme/web/issues/31"}]`)
 
 	dir := seedGitRemoteWorkspace(t, "https://github.com/acme/web.git")
-	p, err := svc.CreateProject(ctx, comp, "web", dir, "d6")
+	p, err := svc.CreateProject(ctx, comp, "web", dir, "d6", "")
 	if err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}

@@ -99,12 +99,12 @@ func projectRefreshCodeCmd() *cobra.Command {
 }
 
 func projectCreateCmd() *cobra.Command {
-	var companyID, name, rootPath, description string
+	var companyID, name, rootPath, description, repoURL string
 	cmd := &cobra.Command{
 		Use:   "create",
-		Short: "Create a project (root dir must be git, or empty/nonexistent to be git-inited)",
+		Short: "Create a project (empty/nonexistent root + --repo-url → OS auto-clones the code; else local git-inited)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			p, err := svc.CreateProject(cmd.Context(), companyID, name, rootPath, description)
+			p, err := svc.CreateProject(cmd.Context(), companyID, name, rootPath, description, repoURL)
 			if err != nil {
 				return err
 			}
@@ -114,7 +114,8 @@ func projectCreateCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&companyID, "company", "", "company id")
 	cmd.Flags().StringVar(&name, "name", "", "project name (unique per company)")
-	cmd.Flags().StringVar(&rootPath, "root-path", "", "absolute path to the project git directory (existing git, or empty/nonexistent to be git-inited)")
+	cmd.Flags().StringVar(&rootPath, "root-path", "", "absolute path to the project git directory (existing git, or empty/nonexistent; empty/nonexistent + --repo-url → auto-clone)")
+	cmd.Flags().StringVar(&repoURL, "repo-url", "", "GitHub repo URL to clone into an empty/nonexistent root (bind: project ⇄ github repo)")
 	cmd.Flags().StringVar(&description, "description", "", "project description")
 	return cmd
 }

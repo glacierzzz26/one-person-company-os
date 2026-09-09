@@ -29,13 +29,15 @@ func isUniqueViolation(err error) bool {
 	return strings.Contains(err.Error(), "UNIQUE constraint failed")
 }
 
-// rootReady 校验并把 rootPath 就绪为 git 仓库,不写业务内容(契约 §一.1):
-//   - 已存在且 git → 直接用;
-//   - 不存在 → mkdir -p;空目录(无 .git)→ git init;
-//   - 已存在非空但非 git → ErrInvalid(带指引)。
+// rootReady 校验并把 rootPath 就绪为 git 仓库,不写业务内容(契约 §一.1 + 自动取码方向):
+//   - repoURL == "":既有就绪 —— 已存在且 git → 直接用;不存在 → mkdir -p;空目录(无 .git)→ git init;
+//     已存在非空但非 git → ErrInvalid(带指引)。
+//   - repoURL != "":建时克隆方向 —— 已存在且 git → 直接用(不覆盖本地已有 remote);空目录/不存在 →
+//     把远端克隆成本项目代码(git clone 允许进空目录);非空非 git → ErrInvalid。clone 失败 → 建项目失败
+//     (rootReady 在落库前,不留空壳半绑定)。
 //
-// 不 clone、不搬、不写入内容;root 在 OS 之外(委派面),OS 只做 git init / 读状态。
-func rootReady(ctx context.Context, rootPath string) error {
+// repoURL == "" 时 OS 只做 git init / 读状态,不 clone、不搬、不写入内容;root 在 OS 之外(委派面)。
+func rootReady(ctx context.Context, rootPath, repoURL string) error {
 	abs, err := filepath.Abs(rootPath)
 	if err != nil {
 		return fmt.Errorf("%w: bad root path %q: %v", ErrInvalid, rootPath, err)
@@ -45,7 +47,7 @@ func rootReady(ctx context.Context, rootPath string) error {
 	case err == nil && !info.IsDir():
 		return fmt.Errorf("%w: root path %q is not a directory", ErrInvalid, abs)
 	case err == nil:
-		// 已存在目录:git → 直接用;空目录 → git init;非空非 git → 报错带指引。
+		// 已存在目录:git → 直接用;空目录 → 下方 clone/init;非空非 git → 报错带指引。
 		if wsIsGit(ctx, abs) {
 			return nil
 		}
@@ -55,7 +57,7 @@ func rootReady(ctx context.Context, rootPath string) error {
 		}
 		if !empty {
 			return fmt.Errorf("%w: root path %q exists, is non-empty, and is not a git repository — "+
-				"point at an existing git repo, or an empty/nonexistent path (OS will mkdir + git init)",
+				"point at an existing git repo, or an empty/nonexistent path (OS will clone --repo-url, or mkdir + git init without one)",
 				ErrInvalid, abs)
 		}
 	case os.IsNotExist(err):
@@ -64,6 +66,13 @@ func rootReady(ctx context.Context, rootPath string) error {
 		}
 	default:
 		return err
+	}
+	// abs 现为空目录(新建或原空)且非 git:给了 repo_url → 克隆代码;否则 git init。
+	if strings.TrimSpace(repoURL) != "" {
+		if cerr := gitCloneURL(ctx, strings.TrimSpace(repoURL), abs); cerr != nil {
+			return cerr
+		}
+		return nil
 	}
 	if _, ierr := gitDirCmd(ctx, abs, "init"); ierr != nil {
 		return fmt.Errorf("git init %q: %w", abs, ierr)
@@ -237,16 +246,17 @@ func (s *Service) CodeSourceFor(ctx context.Context, projectID string) (*osrepo.
 	return &r, nil
 }
 
-func (s *Service) CreateProject(ctx context.Context, companyID, name, rootPath, description string) (project.Project, error) {
-	return s.CreateProjectAs(ctx, companyID, name, rootPath, description, "human:cli")
+func (s *Service) CreateProject(ctx context.Context, companyID, name, rootPath, description, repoURL string) (project.Project, error) {
+	return s.CreateProjectAs(ctx, companyID, name, rootPath, description, repoURL, "human:cli")
 }
 
-// CreateProjectAs 建项目:root 就绪(git init 见 rootReady)→ 落库 → audit。
-func (s *Service) CreateProjectAs(ctx context.Context, companyID, name, rootPath, description, actor string) (project.Project, error) {
+// CreateProjectAs 建项目:root 就绪(空目录/不存在 + repoURL → 自动 clone,见 rootReady)→ 落库 → audit。
+// repoURL 仅驱动建时克隆,不入库:克隆后 origin 即成为代码源单一来源(ensureCodeSource 自动派生)。
+func (s *Service) CreateProjectAs(ctx context.Context, companyID, name, rootPath, description, repoURL, actor string) (project.Project, error) {
 	if companyID == "" || name == "" || rootPath == "" {
 		return project.Project{}, fmt.Errorf("%w: --company, --name and --root-path are required", ErrInvalid)
 	}
-	if err := rootReady(ctx, rootPath); err != nil {
+	if err := rootReady(ctx, rootPath, repoURL); err != nil {
 		return project.Project{}, err
 	}
 	abs, _ := filepath.Abs(rootPath)

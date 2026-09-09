@@ -266,17 +266,28 @@ export function EndpointCreateModal({ open, onClose, onDone }: ModalProps) {
   );
 }
 
-/** 新建项目(Phase 10.1):root 就绪策略 —— 已 git 直接用;空/不存在 → OS mkdir+git init;非空非 git → 400 */
+/** 新建项目(Phase 10.1 + 自动取码):root 就绪策略 —— 已 git 直接用;空/不存在 + repo_url → OS 自动 clone;
+ *  空/不存在无 repo_url → OS mkdir+git init;非空非 git → 400 */
 export function ProjectCreateModal({ open, onClose, onDone }: ModalProps) {
   const { message } = App.useApp();
   const { companyId } = useApp();
   const [busy, setBusy] = useState(false);
 
-  const submit = async (v: { name: string; root_path: string; description?: string }) => {
+  const submit = async (v: {
+    name: string;
+    root_path: string;
+    description?: string;
+    repo_url?: string;
+  }) => {
     if (!companyId) return;
     setBusy(true);
     try {
-      await createProject(companyId, { name: v.name, root_path: v.root_path.trim(), description: v.description });
+      await createProject(companyId, {
+        name: v.name,
+        root_path: v.root_path.trim(),
+        description: v.description,
+        repo_url: (v.repo_url ?? '').trim(),
+      });
       message.success('项目已建(root 已就绪为 git 仓库)');
       onClose();
       onDone();
@@ -296,13 +307,20 @@ export function ProjectCreateModal({ open, onClose, onDone }: ModalProps) {
         <Form.Item name="root_path" label="Root 目录(绝对路径)*" rules={[{ required: true, message: '必填' }]}>
           <Input placeholder="/srv/projects/acme-web" className="mono" />
         </Form.Item>
+        <Form.Item
+          name="repo_url"
+          label="GitHub 地址(可空)"
+          tooltip="填了且 root 为空/不存在 → OS 自动把代码 clone 进项目目录并绑定代码源;留空 → 本地 mkdir + git init"
+        >
+          <Input placeholder="https://github.com/owner/repo(.git)" className="mono" />
+        </Form.Item>
         <Form.Item name="description" label="描述">
           <Input.TextArea rows={2} placeholder="这个项目(目录)是做什么的" />
         </Form.Item>
         <Alert
           type="info"
           showIcon
-          message="Root 就绪:指向已有 git 仓库直接用;空/不存在目录将由 OS mkdir + git init。存在且非空但非 git → 400。删除项目绝不碰磁盘目录。"
+          message="Root 就绪:指向已有 git 仓库直接用;空/不存在目录 + GitHub 地址 → OS clone 代码,否则 mkdir + git init。存在且非空但非 git → 400。删除项目绝不碰磁盘目录。"
           style={{ marginBottom: 12 }}
         />
         <div style={{ textAlign: 'right' }}>

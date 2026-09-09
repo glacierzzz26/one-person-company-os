@@ -177,7 +177,7 @@ func TestSrv3ScheduleOnceTick(t *testing.T) {
 	comp := seedCompany(t, st, "ACME", "")
 	seedEngineEndpoints(t, st, comp.ID)
 
-	prj, err := srv.svc.CreateProject(ctx, comp.ID, "web", filepath.Join(t.TempDir(), "web"), "")
+	prj, err := srv.svc.CreateProject(ctx, comp.ID, "web", filepath.Join(t.TempDir(), "web"), "", "")
 	if err != nil {
 		t.Fatalf("Srv3 create project: %v", err)
 	}

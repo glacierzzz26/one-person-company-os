@@ -71,6 +71,7 @@ func (s *Server) apiCreateProject(w http.ResponseWriter, r *http.Request) {
 		Name        string `json:"name"`
 		RootPath    string `json:"root_path"`
 		Description string `json:"description"`
+		RepoURL     string `json:"repo_url"` // 可空:空目录/不存在 root 时 OS 自动 clone 该 GitHub 地址
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -79,7 +80,7 @@ func (s *Server) apiCreateProject(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, http.StatusBadRequest, "bad_request", "company_id, name and root_path are required")
 		return
 	}
-	p, err := s.svc.CreateProjectAs(r.Context(), pathParam(r, "id"), req.Name, req.RootPath, req.Description, consoleActor)
+	p, err := s.svc.CreateProjectAs(r.Context(), pathParam(r, "id"), req.Name, req.RootPath, req.Description, req.RepoURL, consoleActor)
 	if err != nil {
 		handleServiceErr(w, err)
 		return

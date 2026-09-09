@@ -3,6 +3,8 @@ os.db
 *.db
 *.db-shm
 *.db-wal
+# 主密钥(Phase 9;<db>.key 0600,永不提交)
+*.db.key
 
 # 构建产物
 /bin/
