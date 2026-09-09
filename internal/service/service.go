@@ -20,6 +20,11 @@ type Service struct {
 	// publishRunPR 按项目写 token 实时构建真实 github.Client(PR 创建 + default_branch 兜底);
 	// 测试注入 fake(记录 CreatePull 参,不触网)。git push 不经它,走 gitAuthEnv 宿主侧。
 	prPub github.PullPublisher
+	// runner OS 机械 verify 命令执行器(Phase 10.6,契约 os-mechanical-verify.md §3.4)。nil →
+	// runMechanicalVerify 按封闭命令集(go-build/go-test)实时构建 realCmdRunner(继承宿主 go env,
+	// 不改网络策略);测试注入 fake(记录 argv/产出、向 workspace 落残留),离线确定。只被合成计划里
+	// 显式声明 verify 的 os-accept 相位触达 —— 无 verify 标记的相位(既有 SY*)永不 exec go。
+	runner cmdRunner
 }
 
 func New(store *repository.Store) *Service {

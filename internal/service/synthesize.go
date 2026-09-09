@@ -58,6 +58,7 @@ type synthPhaseSpec struct {
 	Allocator  string `json:"allocator"`  // do→delegate;accept→os|judge;dispose→os|judge|manual
 	Acceptance string `json:"acceptance"` // 验收判据(单行;供 OS 机械允许清单 / 判读模型)
 	Output     string `json:"output"`     // 期望产出相对路径(单行;os accept 必填)
+	Verify     string `json:"verify"`     // Phase 10.6 可选:os accept 上 OS 真跑的封闭命令键(go-build|go-test;空 = 无 verify)
 }
 
 type synthPlanSpec struct {
@@ -81,7 +82,9 @@ func parseSynthPlan(out string) (synthPlanSpec, error) {
 //   - 相位 ≤ synthPhaseCap;至少 1 do + 1 accept;
 //   - do→allocator=delegate;accept→os|judge 且 acceptance 非空;dispose→os|judge|manual;
 //   - accept(os)→output 必填(允许清单落点);do 紧随 accept / accept 紧随 do(成对,返工语义唯一);
-//   - acceptance/output/title 单行、output 相对路径白名单(无 .. / 空白 / 前导 /)。
+//   - acceptance/output/title 单行、output 相对路径白名单(无 .. / 空白 / 前导 /);
+//   - Phase 10.6 verify(OS 真跑命令):仅允许在 allocator=os 的 accept 相位非空,且值 ∈ 封闭词表
+//     {go-build, go-test}(judge accept / do / dispose 上出现 → 计划无效;词表外 → 无效,均降级)。
 func validateSynthPlan(spec synthPlanSpec) error {
 	phases := spec.Phases
 	if len(phases) > synthPhaseCap {
@@ -93,9 +96,11 @@ func validateSynthPlan(spec synthPlanSpec) error {
 		if title == "" || strings.ContainsRune(title, '\n') {
 			return fmt.Errorf("phase %d: title must be a non-empty single line", i+1)
 		}
-		if strings.ContainsRune(sp.Acceptance, '\n') || strings.ContainsRune(sp.Output, '\n') {
-			return fmt.Errorf("phase %d: acceptance/output must be single-line", i+1)
+		if strings.ContainsRune(sp.Acceptance, '\n') || strings.ContainsRune(sp.Output, '\n') ||
+			strings.ContainsRune(sp.Verify, '\n') {
+			return fmt.Errorf("phase %d: acceptance/output/verify must be single-line", i+1)
 		}
+		verify := strings.TrimSpace(sp.Verify)
 		switch sp.Kind {
 		case plan.PhaseKindDo:
 			nDo++
@@ -105,6 +110,9 @@ func validateSynthPlan(spec synthPlanSpec) error {
 			// do 必须紧跟其 accept(返工对象唯一;dispose 不插在 do/accept 之间)
 			if i+1 >= len(phases) || phases[i+1].Kind != plan.PhaseKindAccept {
 				return fmt.Errorf("phase %d (do): must be immediately followed by an accept phase", i+1)
+			}
+			if verify != "" {
+				return fmt.Errorf("phase %d (do): verify is only allowed on an os accept phase", i+1)
 			}
 		case plan.PhaseKindAccept:
 			nAccept++
@@ -119,8 +127,15 @@ func validateSynthPlan(spec synthPlanSpec) error {
 				if strings.TrimSpace(sp.Output) == "" || !validOutputRel(sp.Output) {
 					return fmt.Errorf("phase %d (accept os): a valid relative output path is required (allowed list fallback)", i+1)
 				}
+				// Phase 10.6:os accept 可选 verify(OS 真跑封闭命令集作额外机械验收);词表外 → 计划无效降级。
+				if verify != "" && !verifyIsKey(verify) {
+					return fmt.Errorf("phase %d (accept os): verify must be one of %s (got %q)", i+1, strings.Join(verifyCommandKeys(), "|"), verify)
+				}
 			case plan.AllocatorJudge:
-				// judge 判读:output 可选(判读喂 do 的 diff/产出)
+				// judge 判读:output 可选(判读喂 do 的 diff/产出);verify 仅 os 机械执行可声明。
+				if verify != "" {
+					return fmt.Errorf("phase %d (accept judge): verify is only allowed on an os accept phase", i+1)
+				}
 			default:
 				return fmt.Errorf("phase %d (accept): allocator must be os|judge (got %q)", i+1, sp.Allocator)
 			}
@@ -129,6 +144,9 @@ func validateSynthPlan(spec synthPlanSpec) error {
 			case plan.AllocatorOS, plan.AllocatorJudge, plan.AllocatorManual:
 			default:
 				return fmt.Errorf("phase %d (dispose): allocator must be os|judge|manual (got %q)", i+1, sp.Allocator)
+			}
+			if verify != "" {
+				return fmt.Errorf("phase %d (dispose): verify is only allowed on an os accept phase", i+1)
 			}
 		default:
 			return fmt.Errorf("phase %d: unknown kind %q (do|accept|dispose)", i+1, sp.Kind)
@@ -165,6 +183,10 @@ func synthPhaseNote(sp synthPhaseSpec) string {
 	if o := strings.TrimSpace(sp.Output); o != "" {
 		parts = append(parts, synthOutputPrefix+o)
 	}
+	// Phase 10.6:os accept 显式 verify 标记行(读回 phaseVerify)。
+	if v := strings.TrimSpace(sp.Verify); v != "" {
+		parts = append(parts, synthVerifyPrefix+v)
+	}
 	return strings.Join(parts, "\n")
 }
 
@@ -180,6 +202,16 @@ func phaseAcceptance(ph plan.RunPlanPhase) string {
 
 // phaseOutputs 读回 phase.note 的全部 output 相对路径(单行逐条)。
 func phaseOutputs(ph plan.RunPlanPhase) []string { return outputsFromNote(ph.Note) }
+
+// phaseVerify 读回 phase.note 的 verify 封闭命令键(Phase 10.6;os accept 上 OS 真跑的命令;单行)。
+func phaseVerify(ph plan.RunPlanPhase) string {
+	for _, line := range strings.Split(ph.Note, "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(line), synthVerifyPrefix); ok {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
 
 // ---- runSynthesized 入口(§3.3) ----
 
@@ -329,6 +361,10 @@ func synthPrompt(ctx context.Context, t task.Task) string {
 	b.WriteString("- dispose (optional, trailing): allocator os (final hygiene) / judge (advisory) / manual (record for a human).\n")
 	b.WriteString("- Keep phases few and sequential (at most 12). Cover risk; do not include budgeting or cost.\n")
 	b.WriteString("- acceptance and output must be single line; output is a relative path (letters/digits/._-/), never absolute, no spaces, no '..'.\n")
+	b.WriteString("- An os accept MAY carry optional \"verify\": \"go-build\" (go build ./...) or \"go-test\" (go test ./...,\n")
+	b.WriteString("  full compile + tests) to have the OS run that real command as an extra mechanical verdict; it requires a\n")
+	b.WriteString("  Go module (go.mod present in the workspace at accept time). Omit by default; never invent other commands.\n")
+
 	b.WriteString("- The agent (not you) runs tests/builds inside the workspace; you must not require arbitrary host commands from the OS.\n\n")
 	b.WriteString("Reply with EXACTLY ONE JSON object, no prose, no code fence, shape:\n")
 	b.WriteString("  {\"summary\":\"<one-line plan summary>\",\"phases\":[\n")
@@ -673,7 +709,7 @@ func synthPhaseBrief(t task.Task, do plan.RunPlanPhase, ws, hint string) string 
 func (s *Service) runSynthAccept(ctx, runCtx context.Context, t task.Task, acc, do plan.RunPlanPhase, diff string, rework int) (bool, string, error) {
 	switch acc.Allocator {
 	case plan.AllocatorOS:
-		ok, detail := s.osMechanicalAccept(ctx, t.WorkspacePath, acc)
+		ok, detail := s.osMechanicalAccept(runCtx, t.WorkspacePath, acc)
 		return ok, detail, nil
 	case plan.AllocatorJudge:
 		raw, err := s.synthJudgeCall(ctx, t, acc, do, diff, rework)
@@ -689,12 +725,15 @@ func (s *Service) runSynthAccept(ctx, runCtx context.Context, t task.Task, acc, 
 	return false, "", fmt.Errorf("accept phase allocator %q not supported (os|judge)", acc.Allocator)
 }
 
-// osMechanicalAccept OS 机械验收(只读/确定性允许清单;D3/D4 — 不执行任意项目代码):
+// osMechanicalAccept OS 机械验收(确定性允许清单;D3/D4 — 不执行任意项目代码):
 //  1. 期望产出文件存在(os.Stat,不读内容);
 //  2. 净残留对账:git 工作树 porcelain − 允许项(仅本相位 output 相对路径)→ 无越界意外新文件;
 //  3. git diff --check 空白错误干净。
 //
-// 全过 → ok + 逐条 evidence。任一不过 → (false, reason)。
+// 三检查全过后,若该 accept 相位显式声明 verify(Phase 10.6,契约 os-mechanical-verify.md)→ runMechanicalVerify
+// 真跑封闭命令集(go build ./… / go test ./…)作 D4 真裁判;PASS 判定并入 evidence 首段,FAIL reason 折回返工机。
+//
+// 全过(含 verify PASS)→ ok + 逐条 evidence。任一不过 → (false, reason)。
 func (s *Service) osMechanicalAccept(ctx context.Context, ws string, acc plan.RunPlanPhase) (bool, string) {
 	outputs := phaseOutputs(acc)
 	for _, rel := range outputs {
@@ -737,6 +776,15 @@ func (s *Service) osMechanicalAccept(ctx context.Context, ws string, acc plan.Ru
 	detail := "os mechanical: outputs present"
 	if isGit {
 		detail = "os mechanical: outputs present; worktree residue=0; diff --check clean"
+	}
+	// Phase 10.6:该 accept 相位显式声明 verify(OS 真跑封闭命令集作 D4 真裁判)→ 只读三检查全过后执行。
+	// 结果折回既有 (bool, reason):PASS 判定前置(evidence ≤120 截断保 verify 首段);FAIL reason 进返工机。
+	if key := phaseVerify(acc); key != "" {
+		ok, vd := s.runMechanicalVerify(ctx, ws, key)
+		if !ok {
+			return false, vd
+		}
+		return true, vd + "; " + detail
 	}
 	return true, detail
 }
