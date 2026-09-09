@@ -222,8 +222,34 @@ func toTask(r query.Task) task.Task {
 		TestEndpointID:     nullToPtr(r.TestEndpointID),
 		ProjectID:          nullToPtr(r.ProjectID),
 		PipelineID:         nullToPtr(r.PipelineID),
-		CreatedAt:          r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		PullRequestURL:     r.PullRequestUrl.String, PullRequestNumber: nullIntToPtr(r.PullRequestNumber),
+		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
+}
+
+// nullIntToPtr sql.NullInt64 → *int64(nil 值 → nil)。task 可空 INTEGER 列(10.5 PR 号)用。
+func nullIntToPtr(n sql.NullInt64) *int64 {
+	if !n.Valid {
+		return nil
+	}
+	v := n.Int64
+	return &v
+}
+
+// SetTaskPullRequest 记任务收尾发的 PR(pull_request_url / pull_request_number;幂等账本)。
+// Phase 10.5 publishRunPR 成功后落;URL 已置 = 已发,重试不重复建。
+func (s *Store) SetTaskPullRequest(ctx context.Context, taskID, url string, number int64) error {
+	var num sql.NullInt64
+	if number > 0 {
+		num = sql.NullInt64{Int64: number, Valid: true}
+	}
+	_, err := s.q.SetTaskPullRequest(ctx, query.SetTaskPullRequestParams{
+		PullRequestUrl:    sql.NullString{String: url, Valid: url != ""},
+		PullRequestNumber: num,
+		UpdatedAt:         now(),
+		ID:                taskID,
+	})
+	return err
 }
 
 // SetTaskRound 更新 Task 回合状态(round_no / conflict_count),Engineering Driver 每次

@@ -106,6 +106,52 @@ func (s *Store) DeleteSecret(ctx context.Context, companyID, id string) error {
 	return s.q.DeleteSecret(ctx, query.DeleteSecretParams{CompanyID: companyID, ID: id})
 }
 
+// ---- Phase 10.5 项目机密(project_secret;同公司 secret 的 repo 形状)----
+
+// UpsertProjectSecret 写项目机密密文(有更新 / 无插入)。Cipher 必须已 SealSecret(明文不出 repo)。
+func (s *Store) UpsertProjectSecret(ctx context.Context, sec settings.ProjectSecret) error {
+	if _, err := s.q.GetProjectSecret(ctx, query.GetProjectSecretParams{ProjectID: sec.ProjectID, ID: sec.ID}); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		_, err := s.q.InsertProjectSecret(ctx, query.InsertProjectSecretParams{
+			ProjectID: sec.ProjectID, ID: sec.ID, Cipher: sec.Cipher, UpdatedAt: now(),
+		})
+		return err
+	}
+	_, err := s.q.UpdateProjectSecret(ctx, query.UpdateProjectSecretParams{
+		Cipher: sec.Cipher, UpdatedAt: now(), ProjectID: sec.ProjectID, ID: sec.ID,
+	})
+	return err
+}
+
+// GetProjectSecret 读单条项目机密。无 → sql.ErrNoRows。
+func (s *Store) GetProjectSecret(ctx context.Context, projectID, id string) (settings.ProjectSecret, error) {
+	row, err := s.q.GetProjectSecret(ctx, query.GetProjectSecretParams{ProjectID: projectID, ID: id})
+	if err != nil {
+		return settings.ProjectSecret{}, err
+	}
+	return toProjectSecret(row), nil
+}
+
+// ListProjectSecrets 列某项目全部机密(按 id 升序)。
+func (s *Store) ListProjectSecrets(ctx context.Context, projectID string) ([]settings.ProjectSecret, error) {
+	rows, err := s.q.ListProjectSecrets(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]settings.ProjectSecret, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toProjectSecret(r))
+	}
+	return out, nil
+}
+
+// DeleteProjectSecret 删某项目单条机密(幂等:不存在也返回 nil)。
+func (s *Store) DeleteProjectSecret(ctx context.Context, projectID, id string) error {
+	return s.q.DeleteProjectSecret(ctx, query.DeleteProjectSecretParams{ProjectID: projectID, ID: id})
+}
+
 // ---- mappers ----
 
 func appSettingInsertParams(a settings.AppSetting) query.InsertAppSettingParams {
@@ -164,6 +210,10 @@ func toCompanySetting(r query.CompanySetting) settings.CompanySetting {
 
 func toSecret(r query.Secret) settings.Secret {
 	return settings.Secret{CompanyID: r.CompanyID, ID: r.ID, Cipher: r.Cipher, UpdatedAt: r.UpdatedAt}
+}
+
+func toProjectSecret(r query.ProjectSecret) settings.ProjectSecret {
+	return settings.ProjectSecret{ProjectID: r.ProjectID, ID: r.ID, Cipher: r.Cipher, UpdatedAt: r.UpdatedAt}
 }
 
 func boolInt(b bool) int64 {

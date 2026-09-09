@@ -111,6 +111,16 @@ func (s *Store) GetIssueSync(ctx context.Context, repoID string, issueNumber int
 	return toIssueSync(row), nil
 }
 
+// GetIssueSyncByTask 返回来源 issue 账本(经 issue_sync.task_id 回链)。Phase 10.5 PR 圈定:
+// 任务须是某 GitHub issue 的 direct_work/merge 产物才有行;非 issue 来源 → sql.ErrNoRows。
+func (s *Store) GetIssueSyncByTask(ctx context.Context, taskID string) (osrepo.IssueSync, error) {
+	row, err := s.q.GetIssueSyncByTask(ctx, sql.NullString{String: taskID, Valid: taskID != ""})
+	if err != nil {
+		return osrepo.IssueSync{}, err
+	}
+	return toIssueSync(row), nil
+}
+
 func (s *Store) ListIssueSync(ctx context.Context, companyID string) ([]osrepo.IssueSync, error) {
 	rows, err := s.q.ListIssueSync(ctx, companyID)
 	if err != nil {

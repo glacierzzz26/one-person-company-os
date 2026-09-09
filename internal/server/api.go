@@ -103,6 +103,7 @@ func (s *Server) registerAPIRoutes(r chi.Router) {
 	r.Get("/tasks/{id}", s.apiGetTask)
 	r.Get("/tasks/{id}/executions", s.apiListTaskExecutions)
 	r.Get("/tasks/{id}/plan", s.apiGetTaskPlan) // 10.3:run 计划只读端点(无写口;契约 §3.4)
+	r.Post("/tasks/{id}/publish-pr", s.apiPublishTaskPR) // 10.5:人工重试发收尾 PR(完成态 + 幂等)
 
 	// 审批
 	r.Get("/approvals", s.apiListApprovals)
@@ -121,8 +122,13 @@ func (s *Server) registerAPIRoutes(r chi.Router) {
 	r.Get("/companies/{id}/projects", s.apiListProjects)
 	r.Post("/companies/{id}/projects", s.apiCreateProject)
 	r.Get("/projects/{id}", s.apiGetProject)
+	r.Put("/projects/{id}", s.apiUpdateProject)                                            // 10.5:编辑(名称/描述/GitHub 绑定地址)
 	r.Delete("/projects/{id}", s.apiDeleteProject)
-	r.Post("/projects/{id}/code-source/refresh", s.apiRefreshProjectCodeSource) // D7:建后补/换 remote → 重认领代码源
+	r.Post("/projects/{id}/code-source/refresh", s.apiRefreshProjectCodeSource)            // D7:建后补/换 remote → 重认领代码源
+	r.Get("/projects/{id}/secrets", s.handleListProjectSecrets)                            // 10.5:项目级机密(github_token)
+	r.Put("/projects/{id}/secrets/{secretID}", s.handleSetProjectSecret)
+	r.Delete("/projects/{id}/secrets/{secretID}", s.handleDeleteProjectSecret)
+	r.Post("/projects/{id}/intake/sync", s.apiSyncProjectIssues)                           // 10.5:项目级通道 B 同步(绑仓)
 	r.Get("/projects/{id}/pipelines", s.apiListPipelines)
 	r.Post("/projects/{id}/pipelines", s.apiCreatePipeline)
 	r.Get("/projects/{id}/tasks", s.apiListProjectTasks)                 // 最近 runs(复用 ListTasksByProject)
@@ -254,6 +260,18 @@ func (s *Server) apiListTaskExecutions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apiOK(w, list)
+}
+
+// apiPublishTaskPR POST /tasks/{id}/publish-pr:人工重试发收尾 PR(Phase 10.5,契约 §四 E)。
+// 完成态 + 幂等(已置 pull_request_url → 直接返回既有);prTarget / 项目 token / scripted 门不过 → 400
+// 明确错误(不发网络)。返回完整 task(带 pull_request_url/number 刷新)。
+func (s *Server) apiPublishTaskPR(w http.ResponseWriter, r *http.Request) {
+	t, err := s.svc.PublishTaskPR(r.Context(), pathParam(r, "id"), consoleActor)
+	if err != nil {
+		handleServiceErr(w, err)
+		return
+	}
+	apiOK(w, t)
 }
 
 // ---- 10.3 run 计划只读端点 ----

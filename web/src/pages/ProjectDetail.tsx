@@ -8,6 +8,7 @@ import {
   Button,
   Card,
   Flex,
+  Input,
   Modal,
   Popconfirm,
   Space,
@@ -19,9 +20,12 @@ import {
 import {
   ArrowLeftOutlined,
   DeleteOutlined,
+  EditOutlined,
   FileTextOutlined,
   FolderOutlined,
   GithubOutlined,
+  KeyOutlined,
+  LinkOutlined,
   OrderedListOutlined,
   PlayCircleOutlined,
   PlusOutlined,
@@ -30,16 +34,29 @@ import {
   SyncOutlined,
 } from '@ant-design/icons';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { Approval, IntakeResult, PatrolReport, Pipeline, Project, Task } from '../api/types';
+import type {
+  Approval,
+  IntakeResult,
+  PatrolReport,
+  Pipeline,
+  Project,
+  SecretMeta,
+  Task,
+} from '../api/types';
 import {
   deletePipeline,
   deleteProject,
+  deleteProjectSecret,
   getPatrolReport,
   getProject,
-  intakeSync,
   listPipelines,
+  listProjectSecrets,
   listProjectTasks,
+  publishPullRequest,
   refreshProjectCodeSource,
+  setProjectSecret,
+  syncProjectIssues,
+  updateProject,
 } from '../api/endpoints';
 import { useApp } from '../store/AppContext';
 import { useData } from '../hooks/useApi';
@@ -72,8 +89,11 @@ export default function ProjectDetail() {
   const [repTask, setRepTask] = useState<Task | null>(null);
   const [planTask, setPlanTask] = useState<string | null>(null); // 10.3:runs 行「计划」→ TaskDrawer
   const [decideApproval, setDecideApproval] = useState<Approval | null>(null);
-  const [syncing, setSyncing] = useState(false); // D7:同步 issue(公司级;遍历本项目代码源 + legacy)
+  const [syncing, setSyncing] = useState(false); // 10.5:同步 issue(项目级 SyncProject = 只同步本项目绑定代码源)
   const [refreshing, setRefreshing] = useState(false); // D7:重认领代码源(remote 后补/更换后)
+  const [editOpen, setEditOpen] = useState(false); // 10.5:编辑项目(名称/描述/GitHub 绑定地址)
+  const [tokOpen, setTokOpen] = useState(false); // 10.5:项目 github_token 设/换/删
+  const [publishingId, setPublishingId] = useState<string | null>(null); // 10.5:runs 行人工发 PR 进行中
 
   const project = useData<Project>(() => getProject(projectId), {
     deps: [projectId, refreshKey],
@@ -89,11 +109,17 @@ export default function ProjectDetail() {
     intervalMs: 10000,
     enabled: !!projectId,
   });
+  // 10.5:项目级机密元数据(github_token 掩码;值明文永不出 API)。
+  const secrets = useData<SecretMeta[]>(() => listProjectSecrets(projectId), {
+    deps: [projectId, refreshKey],
+    enabled: !!projectId,
+  });
 
   const p = project.data;
   const pplRows = pipelines.data ?? [];
   const runRows = runs.data ?? [];
   const pplById = new Map(pplRows.map((pl) => [pl.id, pl]));
+  const ghToken = (secrets.data ?? []).find((m) => m.id === 'github_token');
 
   const delProject = async () => {
     try {
@@ -115,19 +141,32 @@ export default function ProjectDetail() {
     }
   };
 
-  // D7:通道 B 同步 — 公司级 intake(本项目代码源 + legacy);结果挑本项目行展示(derived 行 repo name == project name)。
+  // Phase 10.5:通道 B 同步 — 项目级 SyncProject(只同步本项目绑定代码源;项目 token → 公司回退)。
   const syncIssues = async () => {
     if (!p) return;
     setSyncing(true);
     try {
-      const results = await intakeSync(p.company_id);
-      const mine = results.find((r) => r.repo === p.name) ?? results[0];
-      toastIntake(message, mine);
+      const r = await syncProjectIssues(p.id);
+      toastIntake(message, r);
       bump();
     } catch (e) {
       message.error(e instanceof Error ? e.message : String(e));
     } finally {
       setSyncing(false);
+    }
+  };
+
+  // 10.5:人工重试发收尾 PR(完成态 + 幂等;失败 → message 展示后端明确原因)。
+  const publishPR = async (t: Task) => {
+    setPublishingId(t.id);
+    try {
+      await publishPullRequest(t.id);
+      message.success('PR 已发起(或此前已存在)');
+      bump();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPublishingId(null);
     }
   };
 
@@ -157,17 +196,22 @@ export default function ProjectDetail() {
               <Button icon={<ArrowLeftOutlined />}>返回</Button>
             </Link>
             {p ? (
-              <Popconfirm
-                title="删除项目?"
-                description="须无活跃 run;历史任务断关联保留、流水线级联删,磁盘目录绝不碰。"
-                okText="删除"
-                okButtonProps={{ danger: true }}
-                onConfirm={delProject}
-              >
-                <Button danger icon={<DeleteOutlined />}>
-                  删除项目
+              <>
+                <Button icon={<EditOutlined />} onClick={() => setEditOpen(true)}>
+                  编辑
                 </Button>
-              </Popconfirm>
+                <Popconfirm
+                  title="删除项目?"
+                  description="须无活跃 run;历史任务断关联保留、流水线级联删,磁盘目录绝不碰。"
+                  okText="删除"
+                  okButtonProps={{ danger: true }}
+                  onConfirm={delProject}
+                >
+                  <Button danger icon={<DeleteOutlined />}>
+                    删除项目
+                  </Button>
+                </Popconfirm>
+              </>
             ) : null}
           </>
         }
@@ -222,12 +266,32 @@ export default function ProjectDetail() {
         style={{ marginBottom: 14 }}
       >
         {p && p.code_source && p.code_source.has_github ? (
-          <Flex gap={22} wrap align="center">
-            <span className="mono" style={{ fontSize: 13, color: 'var(--accent)' }}>
-              {p.code_source.owner}/{p.code_source.repo}
-            </span>
-            <span className="mono dim" style={{ fontSize: 12 }}>{p.code_source.repo_url}</span>
-            <span className="dim" style={{ fontSize: 12 }}>从本项目 git origin 认领;issue 接活(通道 B)→ 归此项目、用项目目录干</span>
+          <Flex vertical gap={8}>
+            <Flex gap={22} wrap align="center">
+              <span className="mono" style={{ fontSize: 13, color: 'var(--accent)' }}>
+                {p.code_source.owner}/{p.code_source.repo}
+              </span>
+              <span className="mono dim" style={{ fontSize: 12 }}>{p.code_source.repo_url}</span>
+              <span className="dim" style={{ fontSize: 12 }}>
+                从本项目 git origin 认领;issue 接活(通道 B)→ 归此项目、用项目目录干;任务完成自动推 issue 分支并开 PR(需下方项目 token)
+              </span>
+            </Flex>
+            <Flex align="center" justify="space-between" wrap gap={8}>
+              <Space size={6} className="dim" style={{ fontSize: 12 }}>
+                <KeyOutlined />
+                <span>项目 GitHub token(写路径:push + 开 PR 唯一凭据):</span>
+                {ghToken && ghToken.set ? (
+                  <Tag color="success" style={{ marginInlineEnd: 0 }}>
+                    已设置
+                  </Tag>
+                ) : (
+                  <Tag style={{ marginInlineEnd: 0 }}>未设置</Tag>
+                )}
+              </Space>
+              <Button size="small" icon={<KeyOutlined />} onClick={() => setTokOpen(true)}>
+                {ghToken && ghToken.set ? '更换 / 清除 token' : '设置 token'}
+              </Button>
+            </Flex>
           </Flex>
         ) : (
           <Flex gap={12} wrap align="center" justify="space-between">
@@ -367,6 +431,19 @@ export default function ProjectDetail() {
               render: (_, t) => <span className="dim" style={{ fontSize: 12 }}>{t.description || '—'}</span>,
             },
             { title: '状态', width: 104, render: (_, t) => <StatusTag preset={taskStatusPreset(t.status)} label={taskStatusLabel(t.status)} /> },
+            {
+              // 10.5 收尾 PR:有 url → 外链 Tag;completed + 项目绑 GitHub + 无 url → 「发起 PR」人工重试。
+              title: 'PR',
+              width: 128,
+              render: (_, t) => (
+                <PRCell
+                  task={t}
+                  hasGithub={!!p?.code_source?.has_github}
+                  publishing={publishingId === t.id}
+                  onPublish={() => publishPR(t)}
+                />
+              ),
+            },
             { title: '风险', width: 76, render: (_, t) => <RiskText risk={t.risk} /> },
             {
               title: '裁决(巡检)',
@@ -397,6 +474,8 @@ export default function ProjectDetail() {
       <PipelineRunModal open={!!runPipeline} pipeline={runPipeline} onClose={() => setRunPipeline(null)} onDone={bump} />
       <PipelineScheduleModal open={!!editSched} pipeline={editSched} onClose={() => setEditSched(null)} onDone={bump} />
       <PatrolReportModal task={repTask} projectId={projectId} onClose={() => setRepTask(null)} />
+      <ProjectEditModal open={editOpen} project={p ?? null} onClose={() => setEditOpen(false)} onDone={bump} />
+      <ProjectTokenModal open={tokOpen} project={p ?? null} token={ghToken ?? null} onClose={() => setTokOpen(false)} onDone={bump} />
       <TaskDrawer taskId={planTask} onClose={() => setPlanTask(null)} onOpenDecide={(a) => setDecideApproval(a)} />
       <DecideModal
         approval={decideApproval}
@@ -423,6 +502,258 @@ function toastIntake(messageApi: ReturnType<typeof App.useApp>['message'], r?: I
   if (r.created_tasks.length) parts.push(`建单 ${r.created_tasks.length}`);
   if (r.asks.length) parts.push(`问人 ${r.asks.length}`);
   messageApi.success(parts.join(' · '));
+}
+
+// ---- PR 列(10.5 收尾 PR:有 url 外链;completed + 绑 GitHub 无 url → 人工「发起 PR」重试)----
+
+function PRCell({
+  task,
+  hasGithub,
+  publishing,
+  onPublish,
+}: {
+  task: Task;
+  hasGithub: boolean;
+  publishing: boolean;
+  onPublish: () => void;
+}) {
+  if (task.pull_request_url) {
+    return (
+      <a href={task.pull_request_url} target="_blank" rel="noreferrer">
+        <Tag color="success" style={{ marginInlineEnd: 0 }}>
+          {task.pull_request_number ? `PR #${task.pull_request_number}` : 'PR'}
+        </Tag>
+      </a>
+    );
+  }
+  if (task.status === 'completed' && hasGithub) {
+    return (
+      <Button
+        size="small"
+        type="link"
+        icon={<LinkOutlined />}
+        loading={publishing}
+        onClick={onPublish}
+        style={{ paddingInline: 4 }}
+        title="收尾自动发 PR 未成功/未设 token;完成态可人工重试(改 token 或 GitHub 抖动后)"
+      >
+        发起 PR
+      </Button>
+    );
+  }
+  return <span className="dim" style={{ fontSize: 12 }}>—</span>;
+}
+
+// ---- 项目编辑 modal(10.5:名称/描述 + GitHub 绑定地址;root_path 不可编辑)----
+
+function ProjectEditModal({
+  open,
+  project,
+  onClose,
+  onDone,
+}: {
+  open: boolean;
+  project: Project | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { message } = App.useApp();
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [repoURL, setRepoURL] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open && project) {
+      setName(project.name);
+      setDescription(project.description);
+      setRepoURL(project.code_source?.repo_url ?? '');
+    }
+  }, [open, project]);
+
+  const save = async () => {
+    if (!project) return;
+    if (!name.trim()) {
+      message.warning('名称不能为空');
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateProject(project.id, { name, description, repo_url: repoURL.trim() });
+      message.success('项目已更新');
+      onDone();
+      onClose();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onCancel={onClose}
+      onOk={save}
+      confirmLoading={saving}
+      okText="保存"
+      cancelText="取消"
+      title="编辑项目"
+    >
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <div>
+          <Typography.Text strong>名称</Typography.Text>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="项目名称" style={{ marginTop: 4 }} />
+        </div>
+        <div>
+          <Typography.Text strong>描述</Typography.Text>
+          <Input.TextArea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="项目描述(可空)"
+            autoSize={{ minRows: 2, maxRows: 4 }}
+            style={{ marginTop: 4 }}
+          />
+        </div>
+        <div>
+          <Typography.Text strong>GitHub 绑定地址(repo_url)</Typography.Text>
+          <Input
+            value={repoURL}
+            onChange={(e) => setRepoURL(e.target.value)}
+            placeholder="https://github.com/owner/repo(留空不改挂;改动见下约束)"
+            className="mono"
+            style={{ marginTop: 4 }}
+          />
+        </div>
+        <Alert
+          type="info"
+          showIcon
+          message="绑定地址改动约束"
+          description={
+            <span className="dim">
+              root 目录空/不存在 → OS 自动 clone 认领;仅 git init 的零提交占位仓 → 删 .git 再 clone;
+              老项目(带本地 git 历史 / 已指向其它远端)→ 拒绝改挂(暂不做迁移,请新建项目绑定)。root_path 不可编辑。
+            </span>
+          }
+        />
+      </Space>
+    </Modal>
+  );
+}
+
+// ---- 项目 github_token modal(10.5:写路径唯一凭据;值永不回显)----
+
+function ProjectTokenModal({
+  open,
+  project,
+  token,
+  onClose,
+  onDone,
+}: {
+  open: boolean;
+  project: Project | null;
+  token: SecretMeta | null | undefined;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { message } = App.useApp();
+  const [val, setVal] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    if (!project) return;
+    if (!val.trim()) {
+      message.warning('请输入 GitHub token(不能留空)');
+      return;
+    }
+    setBusy(true);
+    try {
+      await setProjectSecret(project.id, 'github_token', val.trim());
+      message.success('项目 token 已设置(git push + 开 PR 走它;明文永不回显)');
+      setVal('');
+      onDone();
+      onClose();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clear = async () => {
+    if (!project) return;
+    setBusy(true);
+    try {
+      await deleteProjectSecret(project.id, 'github_token');
+      message.success('项目 token 已清除(收尾不再自动发 PR;同步 issue 的读端回退公司 token)');
+      setVal('');
+      onDone();
+      onClose();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      onCancel={onClose}
+      title="项目 GitHub token"
+      footer={
+        token && token.set ? (
+          <Flex justify="space-between">
+            <Button danger onClick={clear} loading={busy}>
+              清除 token
+            </Button>
+            <Space>
+              <Button onClick={onClose}>取消</Button>
+              <Button type="primary" loading={busy} onClick={save}>
+                保存
+              </Button>
+            </Space>
+          </Flex>
+        ) : (
+          <Space>
+            <Button onClick={onClose}>取消</Button>
+            <Button type="primary" loading={busy} onClick={save}>
+              设置
+            </Button>
+          </Space>
+        )
+      }
+    >
+      <Space direction="vertical" size={10} style={{ width: '100%' }}>
+        <Alert
+          type="info"
+          showIcon
+          message="写路径(token)与读路径回退"
+          description={
+            <span className="dim">
+              本项目推送分支 + 开 PR 只认这个项目 token(公司级 github_token 只读,绝不用于 push/PR)。
+              token 明文只进本地加密封存(enc:v2 AES-GCM),永不回显、不入库、不入日志。
+            </span>
+          }
+        />
+        <div>
+          <Typography.Text strong>token(设置 / 更换即覆盖)</Typography.Text>
+          <Input.Password
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            placeholder={token && token.set ? '粘贴新 token 以更换(留空保存无效)' : 'ghp_… / github_pat_…'}
+            style={{ marginTop: 4 }}
+            autoComplete="new-password"
+          />
+        </div>
+        {token && token.set ? (
+          <div className="dim" style={{ fontSize: 12 }}>
+            当前已设置(掩码);更换 = 直接粘贴新值保存。
+          </div>
+        ) : null}
+      </Space>
+    </Modal>
+  );
 }
 
 // ---- 裁决列 ----

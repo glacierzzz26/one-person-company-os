@@ -1,7 +1,7 @@
 # Phase 10 设计索引
 
 > 该阶段定稿设计登记处。设计定稿后在此登记,此后按它执行。
-> 状态:🔶 方向定稿 + 10.1/10.2/**10.3/10.4 完结**(2026-09-08;10.4 高智运行时合成 = plan_policy 列触发 + frontier 合成落 upfront 账本 + 先审后干 + 平行驱动 runSynthesized,归档 stages/4.md)+ **增补:项目 ⇄ GitHub 自动代码获取 ✅(2026-09-09;建时 clone + run 前自动拉 = D7 code 源绑定补成实取代码半环,零迁移;归档 stages/5.md)**。下一工作 = Phase 10.5(例行模板化数据化 / OS 机械扩 build·test / 凭据注入·主机 allowlist 任取首项,方向 §八)。
+> 状态:🔶 方向定稿 + 10.1/10.2/**10.3/10.4 完结**(2026-09-08;10.4 高智运行时合成 = plan_policy 列触发 + frontier 合成落 upfront 账本 + 先审后干 + 平行驱动 runSynthesized,归档 stages/4.md)+ **增补:项目 ⇄ GitHub 自动代码获取 ✅(2026-09-09;建时 clone + run 前自动拉 = D7 code 源绑定补成实取代码半环,零迁移;归档 stages/5.md)** + **10.5 项目级 GitHub token + issue→分支→PR 闭环 ✅(2026-09-09;通道 B 补回写半环:每项目 github_token → 同步 issue / 建 bugfix·feature 分支 / 收尾发 PR,人在 GitHub 合入;迁移 0019;归档 stages/6.md)**。Phase 10 完结后候选(10.6+):例行模板化数据化 / OS 机械扩 build·test / 凭据注入·主机 allowlist(方向 §八;原「10.5」指代因本回环取号 10.5 冻结移后)。
 
 | 文档 | 状态 | 定稿日期 |
 |---|---|---|
@@ -11,4 +11,5 @@
 | [phase-plan-contract.md](phase-plan-contract.md) | ✅ 定稿(10.3 实施契约;run 计划账本 task_plan/phase + 双形态 patrol upfront 预铺·engineering grow 记账 + 计划审批=增强既有 risk 门 + 逐阶段 I/O 验收 & patrol OS 机械预检 D4 首落点) | 2026-09-08 |
 | [run-synthesis.md](run-synthesis.md) | ✅ 定稿并实施完结(10.4 实施契约;高智运行时合成 — plan_policy 列触发 + frontier 合成计划落 upfront 账本 + 先审后干 + 平行驱动 runSynthesized 逐阶段 do/accept/dispose + OS 机械只读允许清单;定稿门:预算不做[外部控制]/列触发/机械只读/平行驱动;归档 [stages/4.md](../stages/4.md)) | 2026-09-08 |
 | [project-github-code.md](project-github-code.md) | ✅ 定稿并实施完结(10.4 后增补方向+实施契约;项目绑 GitHub 地址,本地目录可空/不存在 → **建时 OS 自动 clone** + 工程 run 前**首个 fresh 认领自动 pull**;零迁移[origin=代码源单一来源];契约定稿门=本会话计划通过 2026-09-09:建时 clone + run 前拉 + dogfood 公开仓库;归档 [stages/5.md](../stages/5.md)) | 2026-09-09 |
+| [github-roundtrip-pr.md](github-roundtrip-pr.md) | ✅ 定稿并实施完结(10.5 方向+实施契约;**取回半环(上条)补上回写**:每项目一个 GitHub token,OS 回拉 issue / 建 bugfix·feature 分支 / 分支上提交 / 收尾发 PR,审批由人在 GitHub 页面合入 — 项目级机密 project_secret(github_token 白名单,enc:v2: seal)+ token 双层解析(写=仅项目 / 读=项目→公司回退)+ SyncProject 项目级同步 + UpdateProjectAs 已有项目编辑 + finishRun 统一发 PR 三完成点 + POST /tasks/{id}/publish-pr 人工重试;契约定稿门=本会话 ExitPlanMode 计划通过(用户原话逐条保留入 §引言);归档 [stages/6.md](../stages/6.md)) | 2026-09-09 |
 

@@ -39,3 +39,6 @@ SELECT * FROM issue_sync WHERE repo_id = ? AND issue_number = ?;
 
 -- name: ListIssueSync :many
 SELECT * FROM issue_sync WHERE company_id = ? ORDER BY created_at DESC;
+
+-- name: GetIssueSyncByTask :one
+SELECT * FROM issue_sync WHERE task_id = ? LIMIT 1;

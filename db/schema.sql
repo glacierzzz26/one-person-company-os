@@ -86,6 +86,8 @@ CREATE TABLE task (
     test_endpoint_id     TEXT REFERENCES endpoint(id),  -- test 判读槽(8.4;默认 standard,与 review 分槽)
     project_id           TEXT REFERENCES projects(id),  -- Phase 10.1:流水线 run 产物挂项目(可空;删项目先断引用)
     pipeline_id          TEXT REFERENCES pipelines(id), -- Phase 10.2:run 反链流水线(可空;认领判 kind / Web 显形态;删流水线先断引用)
+    pull_request_url     TEXT,                          -- Phase 10.5:run 收尾 GitHub PR url(幂等账本;NULL=未发)
+    pull_request_number  INTEGER,                       -- Phase 10.5:PR 号(Web 外链 / publish-pr 判据)
     created_at     INTEGER NOT NULL,
     updated_at     INTEGER NOT NULL
 );
@@ -210,6 +212,18 @@ CREATE TABLE issue_sync (
 );
 
 CREATE INDEX idx_issue_sync_repo ON issue_sync (repo_id);
+
+CREATE INDEX idx_issue_sync_task ON issue_sync (task_id);  -- 10.5:按 task 反查来源 issue(PR 圈定)
+
+-- Phase 10.5 项目级机密(契约 github-roundtrip-pr.md;与迁移 0019 终态一致)。
+-- project_secret:每项目 GitHub token(写路径唯一凭据),同公司 secret 同款 enc:v2: 加密封存。
+CREATE TABLE project_secret (
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    id         TEXT NOT NULL,            -- 'github_token'(service 白名单校验)
+    cipher     TEXT NOT NULL,            -- enc:v2:<b64>(settings.SealSecret,主密钥)
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (project_id, id)
+);
 
 -- Phase 9 配置治理地基(app_setting/company_setting/secret) —— 与迁移 0012 终态一致。
 

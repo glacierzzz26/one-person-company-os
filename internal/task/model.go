@@ -30,6 +30,10 @@ type Task struct {
 	TestEndpointID     *string `json:"test_endpoint_id"`     // test 判读端点(8.4;默认 standard 档,与 review 分槽);空 = 回退 reviewer/writer
 	ProjectID          *string `json:"project_id"`           // Phase 10.1:流水线 run 产物挂项目;空 = 非流水线任务
 	PipelineID         *string `json:"pipeline_id"`          // Phase 10.2:run 反链流水线(认领判 kind 分流 / Web 显形态);空 = 非流水线 run 产物
-	CreatedAt          int64   `json:"created_at"`
-	UpdatedAt          int64   `json:"updated_at"`
+	// Phase 10.5:run 收尾发布 GitHub PR 的幂等账本。PullRequestURL 非空 = 已发过 PR
+	// (人工 publish-pr 重试直接返回既有,不重复建);来源 issue 经 issue_sync.task_id 回链。
+	PullRequestURL    string `json:"pull_request_url"`
+	PullRequestNumber *int64 `json:"pull_request_number"`
+	CreatedAt         int64  `json:"created_at"`
+	UpdatedAt         int64  `json:"updated_at"`
 }

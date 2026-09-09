@@ -138,7 +138,9 @@ func (s *Service) driveChildrenToDone(ctx context.Context, runCtx context.Contex
 		}
 	}
 	summary := fmt.Sprintf("planner decomposed into %d subtask(s); all completed", len(children))
-	if _, err := s.store.CompleteTask(runCtx, parent.ID, summary); err != nil {
+	// Phase 10.5 收尾:聚合父任务(finishRun:best-effort 发父 PR + CompleteTask)。父才带 issue_sync
+	// 回链(子任务无 ProjectID,不经 delegateBaseline 建分支)→ finishRun 自 HEAD 兜底起分支再发。
+	if err := s.finishRun(ctx, parent, summary); err != nil {
 		return err
 	}
 	_, err := s.audit(ctx, "task", parent.ID, "eng_plan_done", taskActor(parent), summary)

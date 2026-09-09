@@ -99,3 +99,6 @@ UPDATE task SET project_id = NULL, pipeline_id = NULL WHERE project_id = ?;
 
 -- name: ClearTaskPipeline :execrows
 UPDATE task SET pipeline_id = NULL WHERE pipeline_id = ?;
+
+-- name: SetTaskPullRequest :execrows
+UPDATE task SET pull_request_url = ?, pull_request_number = ?, updated_at = ? WHERE id = ?;

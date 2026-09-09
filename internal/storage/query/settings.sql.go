@@ -19,6 +19,20 @@ func (q *Queries) DeleteCompanySetting(ctx context.Context, companyID string) er
 	return err
 }
 
+const deleteProjectSecret = `-- name: DeleteProjectSecret :exec
+DELETE FROM project_secret WHERE project_id = ? AND id = ?
+`
+
+type DeleteProjectSecretParams struct {
+	ProjectID string `json:"project_id"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) DeleteProjectSecret(ctx context.Context, arg DeleteProjectSecretParams) error {
+	_, err := q.db.ExecContext(ctx, deleteProjectSecret, arg.ProjectID, arg.ID)
+	return err
+}
+
 const deleteSecret = `-- name: DeleteSecret :exec
 DELETE FROM secret WHERE company_id = ? AND id = ?
 `
@@ -69,6 +83,27 @@ func (q *Queries) GetCompanySetting(ctx context.Context, companyID string) (Comp
 		&i.AgentCli,
 		&i.IssueSource,
 		&i.IssueFixturePath,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getProjectSecret = `-- name: GetProjectSecret :one
+SELECT project_id, id, cipher, updated_at FROM project_secret WHERE project_id = ? AND id = ?
+`
+
+type GetProjectSecretParams struct {
+	ProjectID string `json:"project_id"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) GetProjectSecret(ctx context.Context, arg GetProjectSecretParams) (ProjectSecret, error) {
+	row := q.db.QueryRowContext(ctx, getProjectSecret, arg.ProjectID, arg.ID)
+	var i ProjectSecret
+	err := row.Scan(
+		&i.ProjectID,
+		&i.ID,
+		&i.Cipher,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -182,6 +217,36 @@ func (q *Queries) InsertCompanySetting(ctx context.Context, arg InsertCompanySet
 	return i, err
 }
 
+const insertProjectSecret = `-- name: InsertProjectSecret :one
+INSERT INTO project_secret (project_id, id, cipher, updated_at)
+VALUES (?, ?, ?, ?)
+RETURNING project_id, id, cipher, updated_at
+`
+
+type InsertProjectSecretParams struct {
+	ProjectID string `json:"project_id"`
+	ID        string `json:"id"`
+	Cipher    string `json:"cipher"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
+func (q *Queries) InsertProjectSecret(ctx context.Context, arg InsertProjectSecretParams) (ProjectSecret, error) {
+	row := q.db.QueryRowContext(ctx, insertProjectSecret,
+		arg.ProjectID,
+		arg.ID,
+		arg.Cipher,
+		arg.UpdatedAt,
+	)
+	var i ProjectSecret
+	err := row.Scan(
+		&i.ProjectID,
+		&i.ID,
+		&i.Cipher,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const insertSecret = `-- name: InsertSecret :one
 INSERT INTO secret (company_id, id, cipher, updated_at)
 VALUES (?, ?, ?, ?)
@@ -210,6 +275,38 @@ func (q *Queries) InsertSecret(ctx context.Context, arg InsertSecretParams) (Sec
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listProjectSecrets = `-- name: ListProjectSecrets :many
+SELECT project_id, id, cipher, updated_at FROM project_secret WHERE project_id = ? ORDER BY id
+`
+
+func (q *Queries) ListProjectSecrets(ctx context.Context, projectID string) ([]ProjectSecret, error) {
+	rows, err := q.db.QueryContext(ctx, listProjectSecrets, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ProjectSecret{}
+	for rows.Next() {
+		var i ProjectSecret
+		if err := rows.Scan(
+			&i.ProjectID,
+			&i.ID,
+			&i.Cipher,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listSecrets = `-- name: ListSecrets :many
@@ -322,6 +419,34 @@ func (q *Queries) UpdateCompanySetting(ctx context.Context, arg UpdateCompanySet
 		&i.AgentCli,
 		&i.IssueSource,
 		&i.IssueFixturePath,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateProjectSecret = `-- name: UpdateProjectSecret :one
+UPDATE project_secret SET cipher = ?, updated_at = ? WHERE project_id = ? AND id = ? RETURNING project_id, id, cipher, updated_at
+`
+
+type UpdateProjectSecretParams struct {
+	Cipher    string `json:"cipher"`
+	UpdatedAt int64  `json:"updated_at"`
+	ProjectID string `json:"project_id"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) UpdateProjectSecret(ctx context.Context, arg UpdateProjectSecretParams) (ProjectSecret, error) {
+	row := q.db.QueryRowContext(ctx, updateProjectSecret,
+		arg.Cipher,
+		arg.UpdatedAt,
+		arg.ProjectID,
+		arg.ID,
+	)
+	var i ProjectSecret
+	err := row.Scan(
+		&i.ProjectID,
+		&i.ID,
+		&i.Cipher,
 		&i.UpdatedAt,
 	)
 	return i, err

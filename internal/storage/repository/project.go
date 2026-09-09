@@ -27,6 +27,18 @@ func (s *Store) GetProject(ctx context.Context, id string) (project.Project, err
 	return toProject(row), nil
 }
 
+// UpdateProject 更新项目元数据(name/description;root_path 不可经此改)。重名 → UNIQUE 冲突错误
+// (service 层按 isUniqueViolation → ErrConflict,与 create 同语义)。
+func (s *Store) UpdateProject(ctx context.Context, p project.Project) (project.Project, error) {
+	row, err := s.q.UpdateProject(ctx, query.UpdateProjectParams{
+		Name: p.Name, Description: p.Description, UpdatedAt: p.UpdatedAt, ID: p.ID,
+	})
+	if err != nil {
+		return project.Project{}, err
+	}
+	return toProject(row), nil
+}
+
 func (s *Store) ListProjectsByCompany(ctx context.Context, companyID string) ([]project.Project, error) {
 	rows, err := s.q.ListProjectsByCompany(ctx, companyID)
 	if err != nil {

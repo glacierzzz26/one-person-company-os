@@ -39,7 +39,12 @@ type Client struct {
 }
 
 func NewClient(token string) *Client {
-	return &Client{token: token, http: &http.Client{Timeout: 20 * time.Second}, api: "https://api.github.com"}
+	return NewClientAt(token, "https://api.github.com")
+}
+
+// NewClientAt 构造指向自定义 apiBase 的 Client(测试经 httptest.Server 覆写 base;生产用 NewClient)。
+func NewClientAt(token, apiBase string) *Client {
+	return &Client{token: token, http: &http.Client{Timeout: 20 * time.Second}, api: strings.TrimSuffix(apiBase, "/")}
 }
 
 var ownerRepoRe = regexp.MustCompile(`(?i)(?:github\.com[:/]|github\.com/|git@github\.com:)([^/\s]+)/([^/\s#]+?)(?:\.git)?$`)
@@ -128,4 +133,90 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// ---- Phase 10.5 PR 发布(契约 github-roundtrip-pr.md §四 D:push 分支后开 PR / 兜底 base) ----
+
+// Pull 是最小 PR 视图(收尾幂等账本落 pull_request_url/number 用)。
+type Pull struct {
+	Number  int64  `json:"number"`
+	HTMLURL string `json:"html_url"`
+}
+
+// PullParams 建 PR 入参(映射 POST /repos/{o}/{r}/pulls 请求体)。
+type PullParams struct {
+	Title string `json:"title"`
+	Head  string `json:"head"` // 源分支名(feature/<issue#>-<slug>)
+	Base  string `json:"base"` // 目标分支名(origin/HEAD 解析 → 分支名,兜底 API default_branch)
+	Body  string `json:"body"` // 收尾带 "Resolves #<issue>"
+}
+
+// PullPublisher 发布 PR(service 收尾 / 人工 publish-pr 用)。真实实现 = *Client;
+// service 测试注入 fake 记录 CreatePull 参(不触网)。
+type PullPublisher interface {
+	CreatePull(ctx context.Context, owner, repo string, p PullParams) (Pull, error)
+}
+
+var _ PullPublisher = (*Client)(nil)
+
+// DefaultBranch 返回仓库 default_branch(PR base 兜底:origin/HEAD symbolic-ref 失效时用)。
+func (c *Client) DefaultBranch(ctx context.Context, owner, repo string) (string, error) {
+	u := fmt.Sprintf("%s/repos/%s/%s", c.api, url.PathEscape(owner), url.PathEscape(repo))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return "", err
+	}
+	c.auth(req)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("github repo %s/%s: HTTP %d: %s", owner, repo, resp.StatusCode, truncate(string(body), 300))
+	}
+	var raw struct {
+		DefaultBranch string `json:"default_branch"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return "", fmt.Errorf("parse github repo: %w", err)
+	}
+	if raw.DefaultBranch == "" {
+		return "", fmt.Errorf("github repo %s/%s: no default_branch in response", owner, repo)
+	}
+	return raw.DefaultBranch, nil
+}
+
+// CreatePull 在仓库开一条 PR(收尾发 PR 的唯一出口)。成功 → Pull{number, html_url};201 以外的
+// 状态码按错误带正文返回(与 PostComment 错误形状一致,供 audit pr_fail 留痕)。
+func (c *Client) CreatePull(ctx context.Context, owner, repo string, p PullParams) (Pull, error) {
+	u := fmt.Sprintf("%s/repos/%s/%s/pulls", c.api, url.PathEscape(owner), url.PathEscape(repo))
+	payload, err := json.Marshal(p)
+	if err != nil {
+		return Pull{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(payload))
+	if err != nil {
+		return Pull{}, err
+	}
+	c.auth(req)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return Pull{}, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusCreated {
+		return Pull{}, fmt.Errorf("github pull %s/%s (%s→%s): HTTP %d: %s", owner, repo, p.Head, p.Base, resp.StatusCode, truncate(string(body), 300))
+	}
+	var pr Pull
+	if err := json.Unmarshal(body, &pr); err != nil {
+		return Pull{}, fmt.Errorf("parse github pull response: %w", err)
+	}
+	if pr.Number == 0 {
+		return Pull{}, fmt.Errorf("github pull %s/%s: no number in response", owner, repo)
+	}
+	return pr, nil
 }

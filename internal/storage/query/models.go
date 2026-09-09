@@ -193,6 +193,13 @@ type Project struct {
 	UpdatedAt   int64  `json:"updated_at"`
 }
 
+type ProjectSecret struct {
+	ProjectID string `json:"project_id"`
+	ID        string `json:"id"`
+	Cipher    string `json:"cipher"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
 type Repo struct {
 	ID            string         `json:"id"`
 	CompanyID     string         `json:"company_id"`
@@ -239,6 +246,8 @@ type Task struct {
 	TestEndpointID     sql.NullString `json:"test_endpoint_id"`
 	ProjectID          sql.NullString `json:"project_id"`
 	PipelineID         sql.NullString `json:"pipeline_id"`
+	PullRequestUrl     sql.NullString `json:"pull_request_url"`
+	PullRequestNumber  sql.NullInt64  `json:"pull_request_number"`
 	CreatedAt          int64          `json:"created_at"`
 	UpdatedAt          int64          `json:"updated_at"`
 }

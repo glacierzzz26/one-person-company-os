@@ -41,6 +41,7 @@ import type {
   UpdateCompanySettingsReq,
   UpdateGlobalSettingsReq,
   UpdatePipelineScheduleReq,
+  UpdateProjectReq,
   Workflow,
 } from './types';
 
@@ -80,6 +81,9 @@ export const listExecutions = (taskId: string) =>
 export const getTaskPlan = (taskId: string) =>
   request<TaskPlanResponse>(`/api/v1/tasks/${taskId}/plan`); // 10.3 只读;plan 可 null
 export const createTask = (body: CreateTaskReq) => request<Task>('/api/v1/tasks', { method: 'POST', body });
+// 10.5:人工重试发收尾 PR(完成态 + 幂等;已发 → 返回既有;失败 → 明确错误)。
+export const publishPullRequest = (taskId: string) =>
+  request<Task>(`/api/v1/tasks/${taskId}/publish-pr`, { method: 'POST' });
 
 // ---- 审批 ----
 export const listApprovals = (status?: string) => {
@@ -134,11 +138,28 @@ export const listProjects = (companyId: string) =>
 export const createProject = (companyId: string, body: CreateProjectReq) =>
   request<Project>(`/api/v1/companies/${companyId}/projects`, { method: 'POST', body });
 export const getProject = (id: string) => request<Project>(`/api/v1/projects/${id}`);
+export const updateProject = (id: string, body: UpdateProjectReq) =>
+  request<Project>(`/api/v1/projects/${id}`, { method: 'PUT', body }); // 10.5:编辑(名称/描述/GitHub 绑定地址)
 export const deleteProject = (id: string) =>
   request<{ id: string; deleted: boolean }>(`/api/v1/projects/${id}`, { method: 'DELETE' });
 // D7:建后补/换 GitHub origin remote → 重认领/刷新项目代码源;无 remote → 400。
 export const refreshProjectCodeSource = (id: string) =>
   request<CodeSource>(`/api/v1/projects/${id}/code-source/refresh`, { method: 'POST' });
+// Phase 10.5 项目级机密(github_token,白名单;设/换/删,永不回显明文)。
+export const listProjectSecrets = (projectId: string) =>
+  request<SecretMeta[]>(`/api/v1/projects/${projectId}/secrets`);
+export const setProjectSecret = (projectId: string, secretId: string, value: string) =>
+  request<{ id: string; set: boolean }>(`/api/v1/projects/${projectId}/secrets/${secretId}`, {
+    method: 'PUT',
+    body: { value },
+  });
+export const deleteProjectSecret = (projectId: string, secretId: string) =>
+  request<{ id: string; deleted: boolean }>(`/api/v1/projects/${projectId}/secrets/${secretId}`, {
+    method: 'DELETE',
+  });
+// 10.5:项目级通道 B 同步(只同步该项目绑定代码源;fixture 离线语义同公司级)。
+export const syncProjectIssues = (projectId: string) =>
+  request<IntakeResult>(`/api/v1/projects/${projectId}/intake/sync`, { method: 'POST' });
 
 export const listPipelines = (projectId: string) =>
   request<Pipeline[]>(`/api/v1/projects/${projectId}/pipelines`);

@@ -87,6 +87,27 @@ func (q *Queries) GetIssueSync(ctx context.Context, arg GetIssueSyncParams) (Iss
 	return i, err
 }
 
+const getIssueSyncByTask = `-- name: GetIssueSyncByTask :one
+SELECT id, company_id, repo_id, issue_number, title, disposition, task_id, note, created_at FROM issue_sync WHERE task_id = ? LIMIT 1
+`
+
+func (q *Queries) GetIssueSyncByTask(ctx context.Context, taskID sql.NullString) (IssueSync, error) {
+	row := q.db.QueryRowContext(ctx, getIssueSyncByTask, taskID)
+	var i IssueSync
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.RepoID,
+		&i.IssueNumber,
+		&i.Title,
+		&i.Disposition,
+		&i.TaskID,
+		&i.Note,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getRepo = `-- name: GetRepo :one
 SELECT id, company_id, name, repo_url, workspace_path, project_id, created_at FROM repos WHERE id = ?
 `

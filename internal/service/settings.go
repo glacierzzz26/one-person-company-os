@@ -197,6 +197,15 @@ const (
 // KnownSecretIDs 白名单(确定性顺序,SecretMeta/校验复用)。
 var KnownSecretIDs = []string{SecretGitHubToken, SecretFeishuWebhook, SecretFeishuSecret}
 
+// Phase 10.5 项目机密(契约 github-roundtrip-pr.md §四 B)。每项目一个 GitHub token —— 写路径
+// (git push + 开 PR)唯一凭据;读路径项目 token → 公司回退(githubTokenFor, runtime.go)。
+const (
+	ProjectSecretGitHubToken = "github_token"
+)
+
+// KnownProjectSecretIDs 项目机密白名单(确定性顺序;暂仅 github_token)。
+var KnownProjectSecretIDs = []string{ProjectSecretGitHubToken}
+
 // SetSecretCurrent 以当前注入主密钥存公司机密(运行期写入走 holder)。主密钥未注入 → 明确报错。
 func (s *Service) SetSecretCurrent(ctx context.Context, companyID, id, plain string) error {
 	key, ok := settings.MasterKey()
@@ -487,6 +496,99 @@ func (s *Service) DeleteCompanySecretAs(ctx context.Context, companyID, id, acto
 	return err
 }
 
+// ---- Phase 10.5 项目机密(github-roundtrip-pr.md §四 B;镜像公司 secret 的 Current/As 形状)----
+
+// SetProjectSecretCurrent 以当前主密钥存项目机密。主密钥未注入 → 明确报错。
+func (s *Service) SetProjectSecretCurrent(ctx context.Context, projectID, id, plain string) error {
+	key, ok := settings.MasterKey()
+	if !ok {
+		return fmt.Errorf("settings: master key not loaded (cannot seal secret; run /setup or start os with a .key file)")
+	}
+	if projectID == "" || id == "" {
+		return fmt.Errorf("settings: projectID and secret id are required")
+	}
+	cipher, err := settings.SealSecret(key, plain)
+	if err != nil {
+		return err
+	}
+	return s.store.UpsertProjectSecret(ctx, settings.ProjectSecret{ProjectID: projectID, ID: id, Cipher: cipher})
+}
+
+// OpenProjectSecretCurrent 以当前主密钥读项目机密明文。ok=false = 无该项目 secret。
+func (s *Service) OpenProjectSecretCurrent(ctx context.Context, projectID, id string) (string, bool, error) {
+	key, ok := settings.MasterKey()
+	if !ok {
+		return "", false, fmt.Errorf("settings: master key not loaded (cannot open secret; run /setup or start os with a .key file)")
+	}
+	sec, err := s.store.GetProjectSecret(ctx, projectID, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	plain, err := settings.OpenSecret(key, sec.Cipher)
+	if err != nil {
+		return "", false, err
+	}
+	return plain, true, nil
+}
+
+// ProjectSecretMeta 项目机密元数据(与 SecretMeta 同形状;白名单顺序 + 存量残留排后)。
+func (s *Service) ProjectSecretMeta(ctx context.Context, projectID string) ([]SecretMeta, error) {
+	secs, err := s.store.ListProjectSecrets(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]settings.ProjectSecret, len(secs))
+	for _, sec := range secs {
+		byID[sec.ID] = sec
+	}
+	out := make([]SecretMeta, 0, len(secs))
+	for _, id := range KnownProjectSecretIDs {
+		if sec, ok := byID[id]; ok {
+			out = append(out, SecretMeta{ID: id, Set: true, UpdatedAt: sec.UpdatedAt})
+		} else {
+			out = append(out, SecretMeta{ID: id})
+		}
+		delete(byID, id)
+	}
+	extras := make([]SecretMeta, 0, len(byID))
+	for _, sec := range byID {
+		extras = append(extras, SecretMeta{ID: sec.ID, Set: true, UpdatedAt: sec.UpdatedAt})
+	}
+	sort.Slice(extras, func(i, j int) bool { return extras[i].ID < extras[j].ID })
+	return append(out, extras...), nil
+}
+
+// DeleteProjectSecretAs 删项目机密(白名单校验;幂等)。写审计(entity=secret,detail 带 project=,与公司机密同筛)。
+func (s *Service) DeleteProjectSecretAs(ctx context.Context, projectID, id, actor string) error {
+	if err := validateProjectSecretID(id); err != nil {
+		return settingsBadRequestf("%s", err.Error())
+	}
+	if err := s.store.DeleteProjectSecret(ctx, projectID, id); err != nil {
+		return err
+	}
+	_, err := s.audit(ctx, "secret", id, "delete", actor, "project="+short8(projectID))
+	return err
+}
+
+// SetProjectSecretAs 设项目机密(白名单校验 + 主密钥 holder 落密文)。值明文只进 seal,不入 audit。
+func (s *Service) SetProjectSecretAs(ctx context.Context, projectID, id, value, actor string) error {
+	if err := validateProjectSecretID(id); err != nil {
+		return settingsBadRequestf("%s", err.Error())
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return settingsBadRequestf("secret %s: value must not be empty", id)
+	}
+	if err := s.SetProjectSecretCurrent(ctx, projectID, id, value); err != nil {
+		return err
+	}
+	_, err := s.audit(ctx, "secret", id, "set", actor, "project="+short8(projectID))
+	return err
+}
+
 // ---- 私有 helpers ----
 
 func validateSecretID(id string) error {
@@ -496,6 +598,16 @@ func validateSecretID(id string) error {
 		}
 	}
 	return fmt.Errorf("unknown secret id %q (known: %s)", id, strings.Join(KnownSecretIDs, ", "))
+}
+
+// validateProjectSecretID 校验项目机密 id(暂仅 github_token)。
+func validateProjectSecretID(id string) error {
+	for _, k := range KnownProjectSecretIDs {
+		if id == k {
+			return nil
+		}
+	}
+	return fmt.Errorf("unknown project secret id %q (known: %s)", id, strings.Join(KnownProjectSecretIDs, ", "))
 }
 
 // validateDigestTime 校验摘要时刻:"" = 关闭(off),否则 "HH:MM"(00-23:00-59)。

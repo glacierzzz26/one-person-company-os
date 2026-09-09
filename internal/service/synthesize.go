@@ -460,7 +460,8 @@ func (s *Service) runSynthPhases(ctx, runCtx context.Context, workerID string, t
 		}
 	}
 	result := fmt.Sprintf("synth: %d phases executed", total)
-	if _, err := s.store.CompleteTask(ctx, t.ID, result); err != nil {
+	// Phase 10.5 收尾:best-effort 发 PR + CompleteTask(finishRun;发布失败只记审计不阻塞)。
+	if err := s.finishRun(ctx, t, result); err != nil {
 		return err
 	}
 	if _, err := s.audit(ctx, "task", t.ID, "eng_complete", taskActor(t),

@@ -91,48 +91,18 @@ func (s *Service) SyncRepos(ctx context.Context, companyID string) ([]IntakeResu
 	}
 	repos = sources
 
-	// 9.3:issue 源按公司解析(secret github_token / company issue_source+fixture 路径;env 仅测试 seam,9.4 产品恒关)。
-	// 同公司仓库复用源(一次 OpenSecretCurrent,循环内 cache);单仓库解析失败不中断(记 errs 续跑)。
+	// 9.3/10.5:issue 源按 repo 归属解析(company issue_source+fixture 路径 / secret github_token:
+	// repo 挂项目 → 项目 token → 公司回退,见 githubTokenFor)。cache 按 (company, project) 复用
+	// (一次 OpenSecretCurrent / fixture LoadFixture);单仓库失败不中断(记 errs 续跑)。
 	results := make([]IntakeResult, 0, len(repos))
-	srcByCompany := map[string]github.Source{}
+	srcCache := map[string]github.Source{}
 	var errs []string
 	for _, r := range repos {
-		src, haveSrc := srcByCompany[r.CompanyID]
-		if !haveSrc {
-			src, err = s.issueSourceFor(ctx, r.CompanyID)
-			if err != nil {
-				errs = append(errs, fmt.Sprintf("repo %s: %v", r.Name, err))
-				continue
-			}
-			srcByCompany[r.CompanyID] = src
-		}
-		owner, name, ok := github.ParseOwnerRepo(r.RepoURL)
-		if !ok {
-			errs = append(errs, fmt.Sprintf("repo %s: cannot parse owner/repo from %q (channel B needs a GitHub repo URL)", r.Name, r.RepoURL))
-			continue
-		}
-		issues, err := src.ListOpenIssues(ctx, owner, name)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("repo %s: %v", r.Name, err))
-			continue
-		}
-		res, ierr := s.IntakeIssues(ctx, r, issues)
-		if ierr != nil {
-			errs = append(errs, fmt.Sprintf("repo %s: %v", r.Name, ierr))
-		}
-		// ask → 真 GitHub 源在 issue 下回帖追问
-		if len(res.Asks) > 0 {
-			if c, ok := src.(interface {
-				PostComment(ctx context.Context, owner, repo string, number int64, body string) error
-			}); ok {
-				for _, a := range res.Asks {
-					if a.Note == "" {
-						continue
-					}
-					if cerr := c.PostComment(ctx, a.Owner, a.Name, a.Number, "[one-person-company-os] "+a.Note); cerr != nil {
-						errs = append(errs, fmt.Sprintf("repo %s: comment #%d: %v", r.Name, a.Number, cerr))
-					}
-				}
+		res, rerr := s.syncRepo(ctx, r, srcCache)
+		if rerr != nil {
+			errs = append(errs, "repo "+r.Name+": "+rerr.Error())
+			if res.Repo == "" {
+				continue // 源/owner/拉取硬失败 → 无部分结果
 			}
 		}
 		results = append(results, res)
@@ -141,6 +111,90 @@ func (s *Service) SyncRepos(ctx context.Context, companyID string) ([]IntakeResu
 		return results, fmt.Errorf("%s", strings.Join(errs, "; "))
 	}
 	return results, nil
+}
+
+// syncRepo 同步单条代码源(通道 B 全链路,供 SyncRepos 逐 repo / SyncProject 复用,契约
+// github-roundtrip-pr.md §四 C):源解析 → 拉 open issues → IntakeIssues → ask 回帖追问。
+// 源解析 / owner 解析 / 拉取硬失败 → (零值, err)(无部分结果);IntakeIssues / 回帖部分失败 →
+// (res, err) —— res.Repo 非空,调用方仍应把 res 计入结果、err 记聚合。
+func (s *Service) syncRepo(ctx context.Context, r osrepo.Repo, cache map[string]github.Source) (IntakeResult, error) {
+	src, err := s.sourceForRepo(ctx, r, cache)
+	if err != nil {
+		return IntakeResult{}, err
+	}
+	owner, name, ok := github.ParseOwnerRepo(r.RepoURL)
+	if !ok {
+		return IntakeResult{}, fmt.Errorf("cannot parse owner/repo from %q (channel B needs a GitHub repo URL)", r.RepoURL)
+	}
+	issues, err := src.ListOpenIssues(ctx, owner, name)
+	if err != nil {
+		return IntakeResult{}, err
+	}
+	res, ierr := s.IntakeIssues(ctx, r, issues)
+	if ierr != nil {
+		return res, ierr
+	}
+	// ask → 真 GitHub 源在 issue 下回帖追问(失败记错,res 仍返回)。
+	if len(res.Asks) > 0 {
+		if c, ok := src.(interface {
+			PostComment(ctx context.Context, owner, repo string, number int64, body string) error
+		}); ok {
+			var cerrs []string
+			for _, a := range res.Asks {
+				if a.Note == "" {
+					continue
+				}
+				if cerr := c.PostComment(ctx, a.Owner, a.Name, a.Number, "[one-person-company-os] "+a.Note); cerr != nil {
+					cerrs = append(cerrs, fmt.Sprintf("comment #%d: %v", a.Number, cerr))
+				}
+			}
+			if len(cerrs) > 0 {
+				return res, fmt.Errorf("%s", strings.Join(cerrs, "; "))
+			}
+		}
+	}
+	return res, nil
+}
+
+// sourceForRepo 解析单 repo 的 issue 源(cache 按 (company, project) 复用)。
+func (s *Service) sourceForRepo(ctx context.Context, r osrepo.Repo, cache map[string]github.Source) (github.Source, error) {
+	proj := ""
+	if r.ProjectID != nil {
+		proj = *r.ProjectID
+	}
+	key := r.CompanyID + "|" + proj
+	if src, ok := cache[key]; ok {
+		return src, nil
+	}
+	src, err := s.issueSourceForProject(ctx, r.CompanyID, proj)
+	if err != nil {
+		return nil, err
+	}
+	cache[key] = src
+	return src, nil
+}
+
+// SyncProject 同步某项目绑定代码源的 open issues(通道 B 全链路;ProjectDetail「同步 issue」打项目级,
+// 契约 github-roundtrip-pr.md §四 C)。无绑仓 / 绑仓非 GitHub → 明确错误。
+func (s *Service) SyncProject(ctx context.Context, projectID string) (*IntakeResult, error) {
+	return s.SyncProjectAs(ctx, projectID, "system")
+}
+
+// SyncProjectAs 同 SyncProject,审计 actor 用传入值(console 动作传 human:console)。
+func (s *Service) SyncProjectAs(ctx context.Context, projectID, actor string) (*IntakeResult, error) {
+	r, err := s.CodeSourceFor(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	if r == nil {
+		return nil, fmt.Errorf("project %s has no GitHub code source bound (add a GitHub origin remote and refresh)", short8(projectID))
+	}
+	res, serr := s.syncRepo(ctx, *r, map[string]github.Source{})
+	if serr != nil {
+		return nil, serr
+	}
+	_, _ = s.audit(ctx, "project", projectID, "sync_issues", actor, r.RepoURL)
+	return &res, nil
 }
 
 // IntakeIssues 对给定仓库的一批 issue 逐个分诊处置(供 SyncRepos 与 webhook 共用)。

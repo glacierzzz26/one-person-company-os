@@ -147,7 +147,8 @@ func (s *Service) runEngineering(ctx context.Context, workerID string, t task.Ta
 			if err := s.ledgerAppendRound(ctx, t, round, diff, testSummary, int64(freeRework), "ok", "approve"); err != nil {
 				return err
 			}
-			if _, err := s.store.CompleteTask(ctx, t.ID, diff); err != nil {
+			// Phase 10.5 收尾:best-effort 发 PR + CompleteTask(finishRun;发布失败只记审计不阻塞)。
+			if err := s.finishRun(ctx, t, diff); err != nil {
 				return err
 			}
 			if _, err := s.audit(ctx, "task", t.ID, "eng_complete", taskActor(t),

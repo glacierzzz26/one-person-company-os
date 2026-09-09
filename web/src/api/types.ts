@@ -86,6 +86,9 @@ export interface Task {
   test_endpoint_id: string | null; // test 判读槽(8.4 分槽;默认 standard 档)
   project_id: string | null; // Phase 10.1:流水线 run 产物挂项目;空 = 非流水线任务
   pipeline_id: string | null; // Phase 10.2:run 反链流水线(形态/裁决展示);空 = 非流水线 run 产物
+  // Phase 10.5:收尾 PR 账本(发起 PR 成功 → GitHub html_url + number;未发/无 token → 空)。
+  pull_request_url?: string | null;
+  pull_request_number?: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -364,6 +367,20 @@ export interface CreatePipelineReq {
   risk?: Risk; // 空 = medium
   schedule?: string; // 10.2:cron 五段 分时日月周;空/off = 不调度
   plan_policy?: PlanPolicy; // 10.4:adaptive(缺省)| synthesize;空 = adaptive
+}
+
+// Phase 10.5 已有项目编辑 PUT /projects/{id}:name/desc/repo_url(可空)。
+// repo_url 语义 = GitHub 绑定地址:root 空/不存在 → clone 认领;零提交占位仓删 .git 再 clone;
+// 老项目(带本地 git 历史 / 指向异远端)→ 400;空 = 不动盘。root_path 不可编辑。
+export interface UpdateProjectReq {
+  name?: string;
+  description?: string;
+  repo_url?: string;
+}
+
+// Phase 10.5:项目级机密元数据(与公司 SecretMeta 同形状;值明文永不出 API,只出 {id,set,updated_at})。
+export interface ProjectSecretMeta extends SecretMeta {
+  // 白名单暂仅 github_token;后端 KnownProjectSecretIDs 决定可设 id。
 }
 
 export const PLAN_POLICIES = ['adaptive', 'synthesize'] as const;

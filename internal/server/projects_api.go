@@ -131,6 +131,87 @@ func (s *Server) apiDeleteProject(w http.ResponseWriter, r *http.Request) {
 	apiOK(w, map[string]any{"id": id, "deleted": true})
 }
 
+// apiUpdateProject PUT /projects/{id}(Phase 10.5 已有项目编辑,契约 §四 E):name/description/
+// repo_url(可空)。name 缺省保留现有(编辑语义);repo_url 缺省 = 不改挂(仅元数据)。重名 →
+// ErrConflict→409;老项目改挂/非法 root → ErrInvalid→400。回 projectView(含 code_source 刷新)。
+func (s *Server) apiUpdateProject(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		RepoURL     string `json:"repo_url"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	id := pathParam(r, "id")
+	cur, err := s.svc.GetProject(r.Context(), id)
+	if err != nil {
+		handleServiceErr(w, err)
+		return
+	}
+	if req.Name == "" {
+		req.Name = cur.Name
+	}
+	p, err := s.svc.UpdateProjectAs(r.Context(), id, req.Name, req.Description, req.RepoURL, consoleActor)
+	if err != nil {
+		handleServiceErr(w, err)
+		return
+	}
+	v, verr := s.projectViewOf(r.Context(), p)
+	if verr != nil {
+		handleServiceErr(w, verr)
+		return
+	}
+	apiOK(w, v)
+}
+
+// apiSyncProjectIssues POST /projects/{id}/intake/sync:项目级通道 B 同步(契约 §四 E)—— 只同步该
+// 项目绑定代码源(CodeSourceFor)的 open issues(项目 token → 公司回退,见 githubTokenFor)。
+func (s *Server) apiSyncProjectIssues(w http.ResponseWriter, r *http.Request) {
+	res, err := s.svc.SyncProjectAs(r.Context(), pathParam(r, "id"), consoleActor)
+	if err != nil {
+		handleServiceErr(w, err)
+		return
+	}
+	apiOK(w, res)
+}
+
+// ---- Phase 10.5 项目机密(契约 §四 E;镜像公司 secret 的 GET/PUT/DELETE,scope 换成项目)----
+// 项目级 github_token:Web 放项目代码源卡,设/换/删,永不回显明文;list 只出掩码 {id,set,updated_at}。
+
+func (s *Server) handleListProjectSecrets(w http.ResponseWriter, r *http.Request) {
+	list, err := s.svc.ProjectSecretMeta(r.Context(), pathParam(r, "id"))
+	if err != nil {
+		handleServiceErr(w, err)
+		return
+	}
+	apiOK(w, list)
+}
+
+func (s *Server) handleSetProjectSecret(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Value string `json:"value"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	projectID, secretID := pathParam(r, "id"), pathParam(r, "secretID")
+	if err := s.svc.SetProjectSecretAs(r.Context(), projectID, secretID, req.Value, consoleActor); err != nil {
+		settingsAPIErr(w, err)
+		return
+	}
+	apiOK(w, map[string]any{"id": secretID, "set": true})
+}
+
+func (s *Server) handleDeleteProjectSecret(w http.ResponseWriter, r *http.Request) {
+	projectID, secretID := pathParam(r, "id"), pathParam(r, "secretID")
+	if err := s.svc.DeleteProjectSecretAs(r.Context(), projectID, secretID, consoleActor); err != nil {
+		settingsAPIErr(w, err)
+		return
+	}
+	apiOK(w, map[string]any{"id": secretID, "deleted": true})
+}
+
 // ---- 流水线 ----
 
 func (s *Server) apiListPipelines(w http.ResponseWriter, r *http.Request) {

@@ -62,3 +62,13 @@ type Secret struct {
 	Cipher    string `json:"cipher"`
 	UpdatedAt int64  `json:"updated_at"`
 }
+
+// ProjectSecret 项目机密(Phase 10.5 github-roundtrip;project_secret 表,PK (project_id, id))。
+// Cipher 同 Secret(enc:v2:,settings.SealSecret,主密钥);明文不出 repo / 不出 service。
+// 项目级 'github_token' 是写路径(git push + 开 PR)的唯一凭据;读路径项目 token → 公司回退。
+type ProjectSecret struct {
+	ProjectID string `json:"project_id"`
+	ID        string `json:"id"` // 白名单暂仅 'github_token'(service 校验)
+	Cipher    string `json:"cipher"`
+	UpdatedAt int64  `json:"updated_at"`
+}

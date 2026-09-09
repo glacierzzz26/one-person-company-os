@@ -39,3 +39,20 @@ SELECT * FROM secret WHERE company_id = ? ORDER BY id;
 
 -- name: DeleteSecret :exec
 DELETE FROM secret WHERE company_id = ? AND id = ?;
+
+-- name: GetProjectSecret :one
+SELECT * FROM project_secret WHERE project_id = ? AND id = ?;
+
+-- name: InsertProjectSecret :one
+INSERT INTO project_secret (project_id, id, cipher, updated_at)
+VALUES (?, ?, ?, ?)
+RETURNING *;
+
+-- name: UpdateProjectSecret :one
+UPDATE project_secret SET cipher = ?, updated_at = ? WHERE project_id = ? AND id = ? RETURNING *;
+
+-- name: ListProjectSecrets :many
+SELECT * FROM project_secret WHERE project_id = ? ORDER BY id;
+
+-- name: DeleteProjectSecret :exec
+DELETE FROM project_secret WHERE project_id = ? AND id = ?;

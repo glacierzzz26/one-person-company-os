@@ -361,6 +361,8 @@ func (s *Service) delegateWriter(ctx context.Context, t task.Task, c engCallCtx)
 //     产物,在同一工作树累积迭代(修订 B 非破坏语义),熔断续跑/requeue 不被自己的残留卡死。
 //
 // scripted 跳过(走 engScripted,不落委派)。9.3:判定走 DB 生效(engineScripted;9.4 起 env 仅测试 seam,产品恒关)。
+// Phase 10.5:认领起点(非 scripted + prTarget 命中)骑到 issue 分支(决策三.3 ①;切换分支不触碰工作树,
+// clean 判定后挂载,净 diff 仍以基线 ref 为锚)。见 pr.go。
 func (s *Service) delegateBaseline(ctx context.Context, t task.Task) error {
 	if s.engineScripted(ctx, t.CompanyID) {
 		return nil
@@ -370,15 +372,21 @@ func (s *Service) delegateBaseline(ctx context.Context, t task.Task) error {
 	if !wsIsGit(ctx, ws) {
 		return fmt.Errorf("writer delegation requires a git workspace (task workspace=%q is not a git repo; bind an os repo checkout)", ws)
 	}
-	if wsPorcelainClean(ctx, ws) {
-		return nil
+	if !wsPorcelainClean(ctx, ws) {
+		prior, err := s.store.HasAuditAction(ctx, "task", t.ID, "eng_delegate")
+		if err != nil {
+			return err
+		}
+		if !prior {
+			return fmt.Errorf("task workspace %q is dirty at claim and this task has not delegated before; refusing to sweep unrelated pre-existing changes (commit or stash them, or bind a clean checkout)", ws)
+		}
 	}
-	prior, err := s.store.HasAuditAction(ctx, "task", t.ID, "eng_delegate")
-	if err != nil {
-		return err
-	}
-	if !prior {
-		return fmt.Errorf("task workspace %q is dirty at claim and this task has not delegated before; refusing to sweep unrelated pre-existing changes (commit or stash them, or bind a clean checkout)", ws)
+	// Phase 10.5 分支挂载:issue 任务认领即骑 bugfix/feature/<issue#>-<slug> 分支,任务间隔离、保
+	// default 分支干净。切换分支不改工作树内容,既有 clean/残留判定不受影响。
+	if target, ok := s.prTarget(ctx, t); ok {
+		if err := ensureIssueBranch(ctx, ws, target.branch); err != nil {
+			return fmt.Errorf("ensure issue branch %s: %w", target.branch, err)
+		}
 	}
 	return nil
 }
